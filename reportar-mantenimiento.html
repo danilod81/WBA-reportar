@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Reportar problema de mantenimiento</title>
+  <meta name="robots" content="noindex" />
+  <style>
+    body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:#fafafa;color:#111}
+    header{width:100%;height:180px;background:url("header.jpg") center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:#fff;position:relative}
+    header::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,0.45)}
+    header h1{position:relative;z-index:1;font-size:1.8rem}
+    .card{max-width:720px;margin:-40px auto 40px;background:#fff;padding:24px;border-radius:14px;box-shadow:0 2px 15px rgba(0,0,0,.1)}
+    label{display:block;margin:14px 0 6px;font-weight:600}
+    textarea,input[type="text"],input[type="file"]{width:100%;padding:10px;border:1px solid #ccc;border-radius:10px}
+    button{margin-top:18px;padding:12px 16px;border-radius:12px;border:0;font-weight:700;cursor:pointer;background:#111;color:#fff}
+    .muted{color:#666;font-size:.95rem}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Reportar problema de mantenimiento</h1>
+  </header>
+
+  <div class="card">
+    <form id="form" method="POST" action="https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento" enctype="multipart/form-data">
+      <input type="hidden" id="departamento" name="departamento" />
+
+      <label for="departamentoManual">Departamento (si no viene por el link)</label>
+      <input type="text" id="departamentoManual" placeholder="Ej: roosevelt-2a" />
+
+      <label for="descripcion">Detalle del problema*</label>
+      <textarea id="descripcion" name="descripcion" rows="5" required placeholder="¿Qué pasó, dónde y desde cuándo?"></textarea>
+
+      <label for="media">Adjuntar foto o video*</label>
+      <input id="media" name="media" type="file" accept="image/*,video/*" capture required />
+
+      <button type="submit">Enviar reporte</button>
+      <div id="status" class="muted" style="margin-top:12px;"></div>
+    </form>
+  </div>
+
+  <script>
+    // Completar "departamento" desde ?departamento=
+    const qs = new URLSearchParams(location.search);
+    const depQS = (qs.get('departamento') || '').trim();
+    if (depQS) document.getElementById('departamento').value = depQS;
+
+    // Validación mínima
+    document.getElementById('form').addEventListener('submit', (e) => {
+      const hidden = document.getElementById('departamento');
+      const manual = document.getElementById('departamentoManual').value.trim();
+      if (!hidden.value && manual) hidden.value = manual;
+
+      const desc = document.getElementById('descripcion').value.trim();
+      const file = document.getElementById('media').files[0];
+      if (!desc || !file) {
+        e.preventDefault();
+        document.getElementById('status').textContent = 'Completá descripción y subí foto o video.';
+      }
+    });
+  </script>
+</body>
+</html>
