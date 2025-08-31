@@ -6,39 +6,107 @@
   <title>Reportar problema de mantenimiento</title>
   <meta name="robots" content="noindex" />
   <style>
-    body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:#fafafa;color:#111}
-    header{width:100%;height:180px;background:url("header.jpg") center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:#fff;position:relative}
-    header::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,0.45)}
-    header h1{position:relative;z-index:1;font-size:1.8rem}
-    .card{max-width:720px;margin:-40px auto 40px;background:#fff;padding:24px;border-radius:14px;box-shadow:0 2px 15px rgba(0,0,0,.1)}
-    label{display:block;margin:14px 0 6px;font-weight:600}
-    textarea,input[type="text"],input[type="file"]{width:100%;padding:10px;border:1px solid #ccc;border-radius:10px}
-    button{margin-top:18px;padding:12px 16px;border-radius:12px;border:0;font-weight:700;cursor:pointer;background:#111;color:#fff}
-    .muted{color:#666;font-size:.95rem}
+    :root{
+      --bg:#f6f7fb; --card:#ffffff; --text:#0f172a; --muted:#64748b;
+      --primary:#111827; --ring:#3b82f6; --border:#e5e7eb;
+      --shadow:0 10px 25px rgba(2,8,23,.08);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
+    /* Header héroe */
+    .hero{
+      position:relative; height:220px; display:grid; place-items:center; text-align:center;
+      background:url("header.jpg") center/cover no-repeat;
+      isolation:isolate;
+    }
+    .hero::after{
+      /* velo para mejorar contraste del texto con cualquier imagen */
+      content:""; position:absolute; inset:0;
+      background:linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.45));
+      z-index:0;
+    }
+    .hero-content{position:relative; z-index:1; color:#fff; padding:16px}
+    .badge{
+      width:64px;height:64px;margin:0 auto 12px; border-radius:18px;
+      background:rgba(255,255,255,.15); backdrop-filter: blur(6px);
+      display:grid; place-items:center; border:1px solid rgba(255,255,255,.25);
+      box-shadow:0 6px 20px rgba(0,0,0,.25);
+    }
+    .hero h1{margin:0;font-size:clamp(1.4rem,2.5vw,2rem); font-weight:800; letter-spacing:.2px}
+
+    /* Tarjeta del formulario */
+    .wrap{max-width:840px; margin:-40px auto 40px; padding:0 16px}
+    .card{
+      background:var(--card); border:1px solid var(--border); border-radius:16px;
+      box-shadow:var(--shadow); padding:22px;
+    }
+    label{display:block; margin:14px 0 6px; font-weight:600}
+    input[type="text"], textarea, input[type="file"]{
+      width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:12px;
+      background:#fff; color:var(--text); outline:none; transition:.15s;
+    }
+    textarea{min-height:140px; resize:vertical}
+    input:focus, textarea:focus, input[type="file"]:focus{
+      border-color:var(--ring); box-shadow:0 0 0 3px rgba(59,130,246,.15);
+    }
+    .row{display:grid; grid-template-columns:1fr; gap:12px}
+    .muted{color:var(--muted); font-size:.95rem}
+    button{
+      display:inline-block; margin-top:6px; padding:12px 18px; border:0; border-radius:12px;
+      background:var(--primary); color:#fff; font-weight:700; cursor:pointer; transition:.15s;
+      box-shadow:0 8px 18px rgba(17,24,39,.16);
+    }
+    button:hover{transform:translateY(-1px)}
+    button:active{transform:translateY(0)}
+    footer{max-width:840px; margin:0 auto 32px; padding:0 16px; color:var(--muted); font-size:.9rem}
+
+    @media (min-width:720px){
+      .card{padding:28px}
+    }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Reportar problema de mantenimiento</h1>
+  <!-- Header con imagen + ícono -->
+  <header class="hero">
+    <div class="hero-content">
+      <div class="badge" aria-hidden="true">
+        <!-- Ícono llave inglesa (SVG) -->
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M21 7.5a5.5 5.5 0 0 1-7.38 5.17l-7.6 7.6a1.5 1.5 0 0 1-2.12-2.12l7.6-7.6A5.5 5.5 0 1 1 21 7.5Z" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="19" cy="5" r="1.6" fill="#fff"/>
+        </svg>
+      </div>
+      <h1>Reportar problema de mantenimiento</h1>
+    </div>
   </header>
 
-  <div class="card">
-    <form id="form" method="POST" action="https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento" enctype="multipart/form-data">
-      <input type="hidden" id="departamento" name="departamento" />
+  <main class="wrap">
+    <div class="card">
+      <form id="form" method="POST" action="https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento" enctype="multipart/form-data" novalidate>
+        <p class="muted">Si entraste desde Notion, el departamento se completa automáticamente.</p>
 
-      <label for="departamentoManual">Departamento (si no viene por el link)</label>
-      <input type="text" id="departamentoManual" placeholder="Ej: roosevelt-2a" />
+        <!-- Departamento oculto (QS) + manual opcional -->
+        <input type="hidden" id="departamento" name="departamento" />
+        <label for="departamentoManual">Departamento (si no viene por el link)</label>
+        <input type="text" id="departamentoManual" placeholder="Ej: roosevelt-2a" autocomplete="off" />
 
-      <label for="descripcion">Detalle del problema*</label>
-      <textarea id="descripcion" name="descripcion" rows="5" required placeholder="¿Qué pasó, dónde y desde cuándo?"></textarea>
+        <label for="descripcion">Detalle del problema <span class="muted">*</span></label>
+        <textarea id="descripcion" name="descripcion" required placeholder="¿Qué pasó, dónde y desde cuándo?"></textarea>
 
-      <label for="media">Adjuntar foto o video*</label>
-      <input id="media" name="media" type="file" accept="image/*,video/*" capture required />
+        <label for="media">Adjuntar foto o video <span class="muted">*</span></label>
+        <input id="media" name="media" type="file" accept="image/*,video/*" capture required />
 
-      <button type="submit">Enviar reporte</button>
-      <div id="status" class="muted" style="margin-top:12px;"></div>
-    </form>
-  </div>
+        <div class="row">
+          <button type="submit">Enviar reporte</button>
+          <div id="status" class="muted" role="status" aria-live="polite"></div>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <footer>
+    <span class="muted">Tip: en Android, “foto/video” suele abrir cámara o te deja elegir. Para video largo (>20 MB) avisá al soporte.</span>
+  </footer>
 
   <script>
     // Completar "departamento" desde ?departamento=
@@ -46,7 +114,7 @@
     const depQS = (qs.get('departamento') || '').trim();
     if (depQS) document.getElementById('departamento').value = depQS;
 
-    // Validación mínima
+    // Validación mínima antes de enviar
     document.getElementById('form').addEventListener('submit', (e) => {
       const hidden = document.getElementById('departamento');
       const manual = document.getElementById('departamentoManual').value.trim();
@@ -56,7 +124,9 @@
       const file = document.getElementById('media').files[0];
       if (!desc || !file) {
         e.preventDefault();
-        document.getElementById('status').textContent = 'Completá descripción y subí foto o video.';
+        document.getElementById('status').textContent = 'Completá descripción y adjuntá una foto o video.';
+      } else {
+        document.getElementById('status').textContent = 'Enviando…';
       }
     });
   </script>
