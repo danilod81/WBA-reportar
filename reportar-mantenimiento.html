@@ -26,7 +26,7 @@
     }
     .hero-content{position:relative; z-index:1; color:#fff; padding:16px}
     .hero h1{margin:0;font-size:clamp(1.8rem,3vw,2.4rem); font-weight:800; letter-spacing:.2px}
-    .hero h2{margin:8px 0 0;font-size:1rem;font-weight:500;opacity:.9}
+    .hero h2{margin:8px 0 0;font-size:1.2rem;font-weight:500;opacity:.95}
     /* Form card */
     .wrap{max-width:840px; margin:-40px auto 40px; padding:0 16px}
     .card{
@@ -34,13 +34,12 @@
       box-shadow:var(--shadow); padding:22px;
     }
     label{display:block; margin:14px 0 6px; font-weight:600}
-    input[type="text"], textarea, input[type="file"]{
+    textarea, input[type="file"]{
       width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:12px;
       background:#fff; color:var(--text); outline:none; transition:.15s;
     }
-    input[readonly]{background:#f3f4f6;color:#374151}
     textarea{min-height:140px; resize:vertical}
-    input:focus, textarea:focus, input[type="file"]:focus{
+    textarea:focus, input[type="file"]:focus{
       border-color:var(--ring); box-shadow:0 0 0 3px rgba(59,130,246,.15);
     }
     .row{display:grid; grid-template-columns:1fr; gap:12px}
@@ -56,11 +55,11 @@
   </style>
 </head>
 <body>
-  <!-- Header con título y subtítulo -->
+  <!-- Header con título y dirección -->
   <header class="hero">
     <div class="hero-content">
       <h1>Reporte de Problema de mantenimiento</h1>
-      <h2>Dirección del departamento</h2>
+      <h2 id="direccionDepto">Dirección del departamento</h2>
     </div>
   </header>
 
@@ -68,12 +67,8 @@
     <div class="card">
       <form id="form" method="POST" action="https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento" enctype="multipart/form-data" novalidate>
         
-        <!-- Departamento oculto (valor real que viaja a n8n) -->
+        <!-- Departamento oculto (viaja a n8n) -->
         <input type="hidden" id="departamento" name="departamento" />
-
-        <!-- Campo visible solo lectura -->
-        <label for="departamentoView">Departamento</label>
-        <input type="text" id="departamentoView" readonly />
 
         <label for="descripcion">Detalle del problema <span class="muted">*</span></label>
         <textarea id="descripcion" name="descripcion" required placeholder="¿Qué pasó, dónde y desde cuándo?"></textarea>
@@ -99,7 +94,7 @@
     const depQS = (qs.get('departamento') || '').trim();
     if (depQS) {
       document.getElementById('departamento').value = depQS;
-      document.getElementById('departamentoView').value = depQS;
+      document.getElementById('direccionDepto').textContent = depQS;
     }
 
     // Validación mínima antes de enviar
