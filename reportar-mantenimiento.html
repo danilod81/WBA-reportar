@@ -34,6 +34,8 @@
     .file-list{color:var(--muted);font-size:.9rem}
     .submit{width:100%;margin-top:22px;padding:16px;border:0;border-radius:12px;background:#111827;color:#fff;font-weight:700;cursor:pointer}
     .status{margin-top:10px;color:var(--muted);text-align:center;font-size:.95rem}
+    .error{color:#b91c1c}
+    .ok{color:#065f46}
   </style>
 </head>
 <body>
@@ -44,8 +46,9 @@
     <div class="card">
       <form id="form" method="POST" action="https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento" enctype="multipart/form-data" novalidate>
         
-        <!-- Hidden: viaja a n8n -->
+        <!-- Hidden: viajan a n8n -->
         <input type="hidden" id="departamento" name="departamento" />
+        <input type="hidden" id="reporta" name="reporta" />
 
         <label for="descripcion">Detalle del problema *</label>
         <textarea id="descripcion" name="descripcion" placeholder="Contanos qué pasó, dónde y desde cuándo…" required></textarea>
@@ -66,36 +69,96 @@
   </div>
 
   <script>
-    // Dirección desde querystring
+    // --- Utilidades ---
+    const MB = 1024 * 1024;
+    const MAX_FILE_MB = 20;          // Límite por archivo (evita 413 y límites de Notion)
+    const MAX_FILES = 10;            // Límite razonable de cantidad
+
     const qs = new URLSearchParams(location.search);
-    const depQS = (qs.get('departamento') || '').trim();
+    const getQS = (k) => (qs.get(k) ?? '').trim();
+
+    // --- Cargar parámetros desde la URL ---
+    const depQS = getQS('departamento');
+    const repQS = getQS('reporta');  // <-- ahora también tomamos 'reporta'
+
     if (depQS) {
       document.getElementById('departamento').value = depQS;
       document.getElementById('direccionDepto').textContent = depQS;
     }
+    if (repQS) {
+      document.getElementById('reporta').value = repQS;
+    }
 
-    // Archivos seleccionados
+    // --- Manejo de archivos seleccionados ---
     const fileInput = document.getElementById('media');
     const fileBtn = document.getElementById('pickFile');
     const fileList = document.getElementById('fileList');
+    const statusEl = document.getElementById('status');
+
     fileBtn.addEventListener('click', () => fileInput.click());
+
     fileInput.addEventListener('change', () => {
-      if (fileInput.files.length > 0) {
-        fileList.textContent = Array.from(fileInput.files).map(f => f.name).join(', ');
-      } else {
+      statusEl.textContent = '';
+      const files = Array.from(fileInput.files);
+      if (!files.length) {
         fileList.textContent = 'Ningún archivo seleccionado';
+        return;
       }
+      // Validaciones
+      if (files.length > MAX_FILES) {
+        statusEl.innerHTML = `<span class="error">Máximo ${MAX_FILES} archivos por reporte.</span>`;
+        fileInput.value = '';
+        fileList.textContent = 'Ningún archivo seleccionado';
+        return;
+      }
+      const tooBig = files.find(f => f.size > MAX_FILE_MB * MB);
+      if (tooBig) {
+        statusEl.innerHTML = `<span class="error">“${tooBig.name}” supera ${MAX_FILE_MB} MB. Elegí archivos más livianos.</span>`;
+        fileInput.value = '';
+        fileList.textContent = 'Ningún archivo seleccionado';
+        return;
+      }
+      // Mostrar listado nombre + tamaño
+      fileList.textContent = files.map(f => `${f.name} (${(f.size/MB).toFixed(1)} MB)`).join(', ');
     });
 
-    // Validación básica
+    // --- Validación y envío ---
     document.getElementById('form').addEventListener('submit', (e) => {
+      statusEl.classList.remove('error','ok');
       const desc = document.getElementById('descripcion').value.trim();
-      if (!desc || fileInput.files.length === 0) {
+      const files = fileInput.files;
+
+      if (!depQS) {
         e.preventDefault();
-        document.getElementById('status').textContent = 'Completá la descripción y adjuntá al menos una foto o video.';
-      } else {
-        document.getElementById('status').textContent = 'Enviando…';
+        statusEl.innerHTML = '<span class="error">Falta el parámetro “departamento” en el link. Volvé a abrir el formulario desde Notion.</span>';
+        return;
       }
+      if (!repQS) {
+        e.preventDefault();
+        statusEl.innerHTML = '<span class="error">Falta el parámetro “reporta” en el link. Volvé a abrir el formulario desde Notion.</span>';
+        return;
+      }
+      if (!desc) {
+        e.preventDefault();
+        statusEl.innerHTML = '<span class="error">Completá la descripción del problema.</span>';
+        return;
+      }
+      if (!files || files.length === 0) {
+        e.preventDefault();
+        statusEl.innerHTML = '<span class="error">Adjuntá al menos una foto o video.</span>';
+        return;
+      }
+      // Revalido tamaños por las dudas
+      for (const f of files) {
+        if (f.size > MAX_FILE_MB * MB) {
+          e.preventDefault();
+          statusEl.innerHTML = `<span class="error">“${f.name}” supera ${MAX_FILE_MB} MB. Reemplazalo por uno más liviano.</span>`;
+          return;
+        }
+      }
+
+      statusEl.innerHTML = 'Enviando…';
+      // Con form POST nativo, el navegador sigue automáticamente 302/303 hacia gracias.html
     });
   </script>
 </body>
