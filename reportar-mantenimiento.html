@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Reporte de Problema de mantenimiento</title>
-  <meta name="robots" content="noindex" />
   <style>
     :root{
       --bg:#f6f7fb; --card:#ffffff; --text:#111827; --muted:#6b7280;
@@ -17,50 +16,24 @@
       background:var(--bg); color:var(--text); line-height:1.5;
       padding-top:env(safe-area-inset-top);
     }
-    .container{
-      max-width:680px; margin:0 auto; padding:20px 16px 40px;
-    }
-    /* Títulos */
-    h1{
-      margin:6px 0 2px; text-align:center;
-      font-size:clamp(1.25rem,4.8vw,1.8rem); font-weight:800;
-      letter-spacing:.2px;
-    }
-    .sub{
-      text-align:center; margin:2px 0 16px; color:var(--muted);
-      font-size:.98rem; min-height:1.4em;
-    }
-    /* Tarjeta */
-    .card{
-      background:var(--card); border:1px solid var(--border); border-radius:16px;
-      padding:20px; margin-top:10px;
-    }
+    .container{max-width:680px;margin:0 auto;padding:20px 16px 40px}
+    h1{text-align:center;font-size:clamp(1.25rem,4.8vw,1.8rem);font-weight:800;margin:6px 0 2px}
+    .sub{text-align:center;margin:2px 0 16px;color:var(--muted);font-size:.98rem;min-height:1.4em}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px}
     label{display:block;margin:18px 0 8px;font-weight:600}
-    textarea{
-      width:100%; padding:14px 14px; border:1px solid var(--border); border-radius:12px;
-      font-size:1rem; min-height:150px; resize:vertical; background:#fff;
-    }
-    textarea:focus{outline:none;border-color:#9ec1ff; box-shadow:0 0 0 3px rgba(37,99,235,.15)}
-    /* Archivo: botón + nombre */
-    .file-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .file-input{position:relative}
+    textarea{width:100%;padding:14px;border:1px solid var(--border);border-radius:12px;font-size:1rem;min-height:150px;resize:vertical}
+    textarea:focus{outline:none;border-color:#9ec1ff;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+    .file-row{display:flex;flex-direction:column;gap:8px}
     .file-input input[type=file]{display:none}
     .file-btn{
-      appearance:none; border:0; border-radius:12px; padding:12px 16px;
-      background:var(--primary); color:#fff; font-weight:600; cursor:pointer;
+      appearance:none;border:0;border-radius:12px;padding:14px 16px;
+      background:var(--primary);color:#fff;font-weight:600;cursor:pointer;
+      text-align:center
     }
     .file-btn:active{transform:translateY(1px)}
-    .file-name{color:var(--muted); font-size:.95rem; min-height:1.4em}
-    /* Botón enviar */
-    .submit{
-      width:100%; margin-top:18px; padding:14px 16px; border:0; border-radius:12px;
-      background:#111827; color:#fff; font-weight:700; cursor:pointer;
-    }
-    .status{margin-top:10px; color:var(--muted); text-align:center; font-size:.95rem}
-    /* Centrado general en mobile */
-    @media (min-width:720px){
-      .card{padding:24px}
-    }
+    .file-list{color:var(--muted);font-size:.9rem}
+    .submit{width:100%;margin-top:22px;padding:16px;border:0;border-radius:12px;background:#111827;color:#fff;font-weight:700;cursor:pointer}
+    .status{margin-top:10px;color:var(--muted);text-align:center;font-size:.95rem}
   </style>
 </head>
 <body>
@@ -70,20 +43,20 @@
 
     <div class="card">
       <form id="form" method="POST" action="https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento" enctype="multipart/form-data" novalidate>
+        
         <!-- Hidden: viaja a n8n -->
         <input type="hidden" id="departamento" name="departamento" />
 
         <label for="descripcion">Detalle del problema *</label>
-        <textarea id="descripcion" name="descripcion" placeholder="Contanos qué pasó, dónde y desde cuándo…"
-                  required></textarea>
+        <textarea id="descripcion" name="descripcion" placeholder="Contanos qué pasó, dónde y desde cuándo…" required></textarea>
 
-        <label for="media">Adjuntar foto o video *</label>
+        <label for="media">Adjuntar fotos o videos *</label>
         <div class="file-row">
           <div class="file-input">
-            <input id="media" name="media" type="file" accept="image/*,video/*" capture required />
-            <button type="button" class="file-btn" id="pickFile">Seleccionar archivo</button>
+            <input id="media" name="media" type="file" accept="image/*,video/*" capture multiple required />
+            <button type="button" class="file-btn" id="pickFile">📷 Sacar foto o video</button>
           </div>
-          <div class="file-name" id="fileName">Ningún archivo seleccionado</div>
+          <div class="file-list" id="fileList">Ningún archivo seleccionado</div>
         </div>
 
         <button class="submit" type="submit">Enviar reporte</button>
@@ -93,7 +66,7 @@
   </div>
 
   <script>
-    // 1) Completar dirección desde ?departamento=
+    // Dirección desde querystring
     const qs = new URLSearchParams(location.search);
     const depQS = (qs.get('departamento') || '').trim();
     if (depQS) {
@@ -101,22 +74,25 @@
       document.getElementById('direccionDepto').textContent = depQS;
     }
 
-    // 2) UI de archivo (sin textos cortados del input nativo)
+    // Archivos seleccionados
     const fileInput = document.getElementById('media');
     const fileBtn = document.getElementById('pickFile');
-    const fileName = document.getElementById('fileName');
+    const fileList = document.getElementById('fileList');
     fileBtn.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => {
-      fileName.textContent = fileInput.files[0] ? fileInput.files[0].name : 'Ningún archivo seleccionado';
+      if (fileInput.files.length > 0) {
+        fileList.textContent = Array.from(fileInput.files).map(f => f.name).join(', ');
+      } else {
+        fileList.textContent = 'Ningún archivo seleccionado';
+      }
     });
 
-    // 3) Validación mínima + feedback
+    // Validación básica
     document.getElementById('form').addEventListener('submit', (e) => {
       const desc = document.getElementById('descripcion').value.trim();
-      const file = fileInput.files[0];
-      if (!desc || !file) {
+      if (!desc || fileInput.files.length === 0) {
         e.preventDefault();
-        document.getElementById('status').textContent = 'Completá la descripción y adjuntá una foto o video.';
+        document.getElementById('status').textContent = 'Completá la descripción y adjuntá al menos una foto o video.';
       } else {
         document.getElementById('status').textContent = 'Enviando…';
       }
