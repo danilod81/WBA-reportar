@@ -2,80 +2,98 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Reporte de Problema de mantenimiento</title>
+  <meta name="robots" content="noindex" />
   <style>
     :root{
-      --bg:#f3f4f6; --card:#ffffff; --text:#111827; --muted:#6b7280;
+      --bg:#f6f7fb; --card:#ffffff; --text:#111827; --muted:#6b7280;
       --primary:#2563eb; --primary-hover:#1d4ed8; --border:#e5e7eb;
-      --shadow:0 8px 30px rgba(0,0,0,.08);
     }
-    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text);line-height:1.5}
-    /* Header */
-    .hero{
-      position:relative; height:240px; display:grid; place-items:center; text-align:center;
-      background:url("header.jpg") center/cover no-repeat;
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      background:var(--bg); color:var(--text); line-height:1.5;
+      padding-top:env(safe-area-inset-top);
     }
-    .hero::after{content:""; position:absolute; inset:0; background:rgba(0,0,0,.45)}
-    .hero-content{position:relative; z-index:1; color:#fff}
-    .hero h1{margin:0;font-size:2.2rem;font-weight:800}
-    .hero h2{margin-top:10px;font-size:1.2rem;font-weight:500;opacity:.95}
-    /* Card */
-    .wrap{max-width:760px;margin:-50px auto 40px;padding:0 16px}
+    .container{
+      max-width:680px; margin:0 auto; padding:20px 16px 40px;
+    }
+    /* Títulos */
+    h1{
+      margin:6px 0 2px; text-align:center;
+      font-size:clamp(1.25rem,4.8vw,1.8rem); font-weight:800;
+      letter-spacing:.2px;
+    }
+    .sub{
+      text-align:center; margin:2px 0 16px; color:var(--muted);
+      font-size:.98rem; min-height:1.4em;
+    }
+    /* Tarjeta */
     .card{
-      background:var(--card); border-radius:20px; box-shadow:var(--shadow);
-      padding:32px 28px;
+      background:var(--card); border:1px solid var(--border); border-radius:16px;
+      padding:20px; margin-top:10px;
     }
-    label{display:block;margin:28px 0 10px;font-weight:600;font-size:.95rem;color:var(--text)}
-    textarea,input[type="file"]{
-      width:100%;padding:14px 16px;border:1px solid var(--border);border-radius:14px;
-      background:#fff;font-size:1rem;transition:.2s
+    label{display:block;margin:18px 0 8px;font-weight:600}
+    textarea{
+      width:100%; padding:14px 14px; border:1px solid var(--border); border-radius:12px;
+      font-size:1rem; min-height:150px; resize:vertical; background:#fff;
     }
-    textarea{min-height:160px;resize:vertical}
-    textarea:focus,input[type="file"]:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.15);outline:none}
-    button{
-      margin-top:28px;width:100%;padding:16px;border:0;border-radius:14px;
-      background:var(--primary);color:#fff;font-size:1rem;font-weight:600;cursor:pointer;
-      transition:.2s box-shadow, .2s background;
-      box-shadow:0 6px 18px rgba(37,99,235,.3);
+    textarea:focus{outline:none;border-color:#9ec1ff; box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+    /* Archivo: botón + nombre */
+    .file-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .file-input{position:relative}
+    .file-input input[type=file]{display:none}
+    .file-btn{
+      appearance:none; border:0; border-radius:12px; padding:12px 16px;
+      background:var(--primary); color:#fff; font-weight:600; cursor:pointer;
     }
-    button:hover{background:var(--primary-hover)}
-    .muted{color:var(--muted);font-size:.9rem;margin-top:14px;text-align:center}
+    .file-btn:active{transform:translateY(1px)}
+    .file-name{color:var(--muted); font-size:.95rem; min-height:1.4em}
+    /* Botón enviar */
+    .submit{
+      width:100%; margin-top:18px; padding:14px 16px; border:0; border-radius:12px;
+      background:#111827; color:#fff; font-weight:700; cursor:pointer;
+    }
+    .status{margin-top:10px; color:var(--muted); text-align:center; font-size:.95rem}
+    /* Centrado general en mobile */
+    @media (min-width:720px){
+      .card{padding:24px}
+    }
   </style>
 </head>
 <body>
-  <!-- Header -->
-  <header class="hero">
-    <div class="hero-content">
-      <h1>Reporte de Problema de mantenimiento</h1>
-      <h2 id="direccionDepto">Dirección del departamento</h2>
-    </div>
-  </header>
+  <div class="container">
+    <h1>🔧 Reporte de Problema de mantenimiento</h1>
+    <div id="direccionDepto" class="sub">Dirección del departamento</div>
 
-  <!-- Form -->
-  <main class="wrap">
     <div class="card">
       <form id="form" method="POST" action="https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento" enctype="multipart/form-data" novalidate>
-        
-        <!-- Hidden depto -->
+        <!-- Hidden: viaja a n8n -->
         <input type="hidden" id="departamento" name="departamento" />
 
         <label for="descripcion">Detalle del problema *</label>
-        <textarea id="descripcion" name="descripcion" required placeholder="Contanos qué pasó, dónde y desde cuándo…"></textarea>
+        <textarea id="descripcion" name="descripcion" placeholder="Contanos qué pasó, dónde y desde cuándo…"
+                  required></textarea>
 
         <label for="media">Adjuntar foto o video *</label>
-        <input id="media" name="media" type="file" accept="image/*,video/*" capture required />
+        <div class="file-row">
+          <div class="file-input">
+            <input id="media" name="media" type="file" accept="image/*,video/*" capture required />
+            <button type="button" class="file-btn" id="pickFile">Seleccionar archivo</button>
+          </div>
+          <div class="file-name" id="fileName">Ningún archivo seleccionado</div>
+        </div>
 
-        <button type="submit">Enviar reporte</button>
-        <div id="status" class="muted" role="status" aria-live="polite"></div>
+        <button class="submit" type="submit">Enviar reporte</button>
+        <div id="status" class="status" role="status" aria-live="polite"></div>
       </form>
     </div>
-  </main>
-
-  <p class="muted">Tip: en Android, “foto/video” suele abrir cámara o galería. Para videos largos (>20 MB) consultá soporte.</p>
+  </div>
 
   <script>
-    // Autocompletar dirección en el header y en hidden
+    // 1) Completar dirección desde ?departamento=
     const qs = new URLSearchParams(location.search);
     const depQS = (qs.get('departamento') || '').trim();
     if (depQS) {
@@ -83,13 +101,22 @@
       document.getElementById('direccionDepto').textContent = depQS;
     }
 
-    // Validación rápida
+    // 2) UI de archivo (sin textos cortados del input nativo)
+    const fileInput = document.getElementById('media');
+    const fileBtn = document.getElementById('pickFile');
+    const fileName = document.getElementById('fileName');
+    fileBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      fileName.textContent = fileInput.files[0] ? fileInput.files[0].name : 'Ningún archivo seleccionado';
+    });
+
+    // 3) Validación mínima + feedback
     document.getElementById('form').addEventListener('submit', (e) => {
       const desc = document.getElementById('descripcion').value.trim();
-      const file = document.getElementById('media').files[0];
+      const file = fileInput.files[0];
       if (!desc || !file) {
         e.preventDefault();
-        document.getElementById('status').textContent = 'Completá descripción y adjuntá una foto o video.';
+        document.getElementById('status').textContent = 'Completá la descripción y adjuntá una foto o video.';
       } else {
         document.getElementById('status').textContent = 'Enviando…';
       }
