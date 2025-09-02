@@ -166,44 +166,43 @@
     }
 
     // --------- Envío ---------
-    document.getElementById('form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      statusEl.classList.remove('error','ok');
-      const desc = (document.getElementById('descripcion').value || '').trim();
+  document.getElementById('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  statusEl.classList.remove('error','ok');
 
-      if (!depQS) { statusEl.innerHTML = '<span class="error">Falta “departamento”. Abrí el link desde Notion.</span>'; return; }
-      if (!repQS) { statusEl.innerHTML = '<span class="error">Falta “reporta”. Abrí el link desde Notion.</span>'; return; }
-      if (!desc)  { statusEl.innerHTML = '<span class="error">Completá la descripción.</span>'; return; }
+  const desc = (document.getElementById('descripcion').value || '').trim();
+  if (!depQS)  { statusEl.innerHTML = '<span class="error">Falta “departamento”.</span>'; return; }
+  if (!repQS)  { statusEl.innerHTML = '<span class="error">Falta “reporta”.</span>'; return; }
+  if (!desc)   { statusEl.innerHTML = '<span class="error">Completá la descripción.</span>'; return; }
 
-      const fd = new FormData();
-      fd.append('departamento', depQS);
-      fd.append('reporta', repQS);
-      fd.append('descripcion', desc);
+  const fd = new FormData();
+  fd.append('departamento', depQS);
+  fd.append('reporta', repQS);
+  fd.append('descripcion', desc);
 
-      if (!fallbackInput.classList.contains('hidden')) {
-        // Fallback: intenta abrir cámara del SO, pero podría permitir galería (lo controlan los permisos del SO)
-        const files = Array.from(fallbackInput.files || []);
-        if (files.length === 0) { statusEl.innerHTML = '<span class="error">Adjuntá al menos una foto.</span>'; return; }
-        for (const f of files) {
-          if (f.size > MAX_FILE_MB * MB) { statusEl.innerHTML = `<span class="error">“${f.name}” supera ${MAX_FILE_MB} MB.</span>`; return; }
-          fd.append('media[]', f, f.name);
-        }
-      } else {
-        if (shots.length === 0) { statusEl.innerHTML = '<span class="error">Sacá al menos una foto.</span>'; return; }
-        shots.forEach((s, i) => fd.append('media[]', s.blob, `foto-${i+1}.jpg`));
-      }
+  if (!fallbackInput.classList.contains('hidden')) {
+    const files = Array.from(fallbackInput.files || []);
+    if (!files.length) { statusEl.innerHTML = '<span class="error">Adjuntá al menos una foto.</span>'; return; }
+    for (const f of files) fd.append('media[]', f, f.name);
+  } else {
+    if (!shots.length) { statusEl.innerHTML = '<span class="error">Sacá al menos una foto.</span>'; return; }
+    shots.forEach((s, i) => fd.append('media[]', s.blob, `foto-${i+1}.jpg`));
+  }
 
-      try {
-        statusEl.textContent = 'Enviando…';
-        const res = await fetch(WEBHOOK_URL, { method: 'POST', body: fd });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        statusEl.innerHTML = '<span class="ok">¡Reporte enviado! Gracias.</span>';
-        // opcional: redirigir a gracias.html
-        // location.href = '/gracias.html';
-      } catch (err) {
-        statusEl.innerHTML = '<span class="error">Error al enviar. Revisá conexión y permisos de cámara.</span>';
-      }
-    });
+  statusEl.textContent = 'Enviando…';
+
+  try {
+    const res  = await fetch(WEBHOOK_URL, { method: 'POST', body: fd });
+    const text = await res.text().catch(() => '');
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} :: ${text.slice(0,300)}`);
+
+    statusEl.innerHTML = '<span class="ok">¡Reporte enviado! Gracias.</span>';
+  } catch (err) {
+    console.error(err);
+    statusEl.innerHTML = `<span class="error">Error al enviar: ${String(err.message || err).slice(0,300)}</span>`;
+  }
+});
+
   </script>
 </body>
 </html>
