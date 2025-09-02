@@ -24,12 +24,13 @@
     .thumb{ position:relative }
     .thumb img{ width:90px; height:90px; object-fit:cover; border-radius:10px; border:1px solid var(--border) }
     .thumb button{ position:absolute; top:4px; right:4px; border-radius:8px; padding:4px 6px; font-size:.8rem; background:#ef4444 }
-    .status{ margin-top:10px; color:var(--muted); text-align:center; font-size:.95rem }
+    .status{ margin-top:10px; color:var(--muted); text-align:center; font-size:.95rem; min-height:1.5em }
     .error{ color:#b91c1c }
     .ok{ color:#065f46 }
     .hidden{ display:none }
     .file-fallback{ color:var(--muted); font-size:.9rem }
     input[type=file]{ display:block; width:100% }
+    .busy{ opacity:.7; pointer-events:none }
   </style>
 </head>
 <body>
@@ -38,7 +39,7 @@
     <div id="direccionDepto" class="sub">Dirección del departamento</div>
 
     <div class="card">
-      <!-- No usamos action: enviamos con fetch para adjuntar Blobs -->
+      <!-- Enviamos con fetch para adjuntar Blobs -->
       <form id="form" novalidate>
         <input type="hidden" id="departamento" name="departamento" />
         <input type="hidden" id="reporta" name="reporta" />
@@ -57,12 +58,12 @@
           </div>
           <div id="thumbs" class="thumbs"></div>
           <div class="file-fallback hidden" id="fallbackNote">No pudimos acceder a la cámara. Usá este campo (intentará abrir la cámara del dispositivo):</div>
-          <!-- Fallback: intenta cámara del SO; algunos navegadores podrían permitir galería -->
+          <!-- Fallback: intenta cámara del SO; algunos navegadores permiten galería -->
           <input id="fallbackInput" class="hidden" type="file" name="media[]" accept="image/*" capture="environment" multiple>
         </div>
 
         <div class="row" style="margin-top:16px">
-          <button class="secondary" type="submit">Enviar reporte</button>
+          <button id="submitBtn" class="secondary" type="submit">Enviar reporte</button>
         </div>
         <div id="status" class="status" role="status" aria-live="polite"></div>
       </form>
@@ -90,6 +91,7 @@
     const fallbackInput = document.getElementById('fallbackInput');
     const fallbackNote = document.getElementById('fallbackNote');
     const statusEl = document.getElementById('status');
+    const submitBtn = document.getElementById('submitBtn');
 
     const MB = 1024 * 1024;
     const MAX_FILES = 10;
@@ -157,7 +159,6 @@
       await startCamera();
     });
 
-    // Arrancamos la cámara al cargar
     if (navigator.mediaDevices?.getUserMedia) startCamera();
     else {
       video.classList.add('hidden');
@@ -165,44 +166,54 @@
       fallbackInput.classList.remove('hidden');
     }
 
-    // --------- Envío ---------
-  document.getElementById('form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  statusEl.classList.remove('error','ok');
+    // --------- Envío con fetch + redirección por JSON ---------
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      statusEl.classList.remove('error','ok');
 
-  const desc = (document.getElementById('descripcion').value || '').trim();
-  if (!depQS)  { statusEl.innerHTML = '<span class="error">Falta “departamento”.</span>'; return; }
-  if (!repQS)  { statusEl.innerHTML = '<span class="error">Falta “reporta”.</span>'; return; }
-  if (!desc)   { statusEl.innerHTML = '<span class="error">Completá la descripción.</span>'; return; }
+      const desc = (document.getElementById('descripcion').value || '').trim();
+      if (!depQS)  { statusEl.innerHTML = '<span class="error">Falta “departamento”.</span>'; return; }
+      if (!repQS)  { statusEl.innerHTML = '<span class="error">Falta “reporta”.</span>'; return; }
+      if (!desc)   { statusEl.innerHTML = '<span class="error">Completá la descripción.</span>'; return; }
 
-  const fd = new FormData();
-  fd.append('departamento', depQS);
-  fd.append('reporta', repQS);
-  fd.append('descripcion', desc);
+      const fd = new FormData();
+      fd.append('departamento', depQS);
+      fd.append('reporta', repQS);
+      fd.append('descripcion', desc);
 
-  if (!fallbackInput.classList.contains('hidden')) {
-    const files = Array.from(fallbackInput.files || []);
-    if (!files.length) { statusEl.innerHTML = '<span class="error">Adjuntá al menos una foto.</span>'; return; }
-    for (const f of files) fd.append('media[]', f, f.name);
-  } else {
-    if (!shots.length) { statusEl.innerHTML = '<span class="error">Sacá al menos una foto.</span>'; return; }
-    shots.forEach((s, i) => fd.append('media[]', s.blob, `foto-${i+1}.jpg`));
-  }
+      if (!fallbackInput.classList.contains('hidden')) {
+        const files = Array.from(fallbackInput.files || []);
+        if (!files.length) { statusEl.innerHTML = '<span class="error">Adjuntá al menos una foto.</span>'; return; }
+        for (const f of files) fd.append('media[]', f, f.name);
+      } else {
+        if (!shots.length) { statusEl.innerHTML = '<span class="error">Sacá al menos una foto.</span>'; return; }
+        shots.forEach((s, i) => fd.append('media[]', s.blob, `foto-${i+1}.jpg`));
+      }
 
-  statusEl.textContent = 'Enviando…';
+      statusEl.textContent = 'Enviando…';
+      submitBtn.classList.add('busy');
 
-  try {
-    const res  = await fetch(WEBHOOK_URL, { method: 'POST', body: fd });
-    const text = await res.text().catch(() => '');
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} :: ${text.slice(0,300)}`);
+      try {
+        const res  = await fetch(WEBHOOK_URL, { method: 'POST', body: fd });
+        // intentamos parsear JSON; si no, texto
+        let data = null;
+        const text = await res.text();
+        try { data = JSON.parse(text); } catch { data = null; }
 
-    statusEl.innerHTML = '<span class="ok">¡Reporte enviado! Gracias.</span>';
-  } catch (err) {
-    console.error(err);
-    statusEl.innerHTML = `<span class="error">Error al enviar: ${String(err.message || err).slice(0,300)}</span>`;
-  }
-});
+        if (!(res.ok && data?.ok && data?.redirect)) {
+          const msg = data?.message || text || `HTTP ${res.status} ${res.statusText}`;
+          throw new Error(msg);
+        }
 
+        // Redirigimos nosotros (fetch no sigue 302 del backend en la UI)
+        window.location.href = data.redirect;
+      } catch (err) {
+        console.error(err);
+        statusEl.innerHTML = `<span class="error">Error al enviar: ${String(err.message || err).slice(0,300)}</span>`;
+      } finally {
+        submitBtn.classList.remove('busy');
+      }
+    });
   </script>
 </body>
 </html>
