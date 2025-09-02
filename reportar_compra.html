@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Registro de Compra</title>
+  <style>
+    :root{ --bg:#f6f7fb; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#2563eb; --border:#e5e7eb; }
+    *{ box-sizing:border-box }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+    .container{ max-width:680px; margin:0 auto; padding:20px 16px 40px }
+    h1{ text-align:center; font-size:clamp(1.25rem,4.8vw,1.8rem); font-weight:800; margin:6px 0 2px }
+    .sub{ text-align:center; margin:2px 0 16px; color:var(--muted); font-size:.98rem; min-height:1.4em }
+    .card{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px }
+    label{ display:block; margin:18px 0 8px; font-weight:600 }
+    input[type=text], input[type=number]{ width:100%; padding:14px; border:1px solid var(--border); border-radius:12px; font-size:1rem; }
+    input:focus{ outline:none; border-color:#9ec1ff; box-shadow:0 0 0 3px rgba(37,99,235,.15) }
+    .cam{ display:grid; gap:10px; margin-top:8px }
+    video{ width:100%; border-radius:12px; background:#000 }
+    .row{ display:flex; gap:10px; flex-wrap:wrap }
+    button{ appearance:none; border:0; border-radius:12px; padding:14px 16px; background:var(--primary); color:#fff; font-weight:600; cursor:pointer }
+    .secondary{ background:#111827 }
+    .thumbs{ display:flex; gap:8px; flex-wrap:wrap }
+    .thumb{ position:relative }
+    .thumb img{ width:90px; height:90px; object-fit:cover; border-radius:10px; border:1px solid var(--border) }
+    .thumb button{ position:absolute; top:4px; right:4px; border-radius:8px; padding:4px 6px; font-size:.8rem; background:#ef4444 }
+    .status{ margin-top:10px; color:var(--muted); text-align:center; font-size:.95rem; min-height:1.5em }
+    .error{ color:#b91c1c }
+    .ok{ color:#065f46 }
+    .hidden{ display:none }
+    .file-fallback{ color:var(--muted); font-size:.9rem }
+    input[type=file]{ display:block; width:100% }
+    .busy{ opacity:.7; pointer-events:none }
+    .net{ position:sticky; top:0; padding:8px 12px; border-radius:10px; background:#fee2e2; color:#991b1b; text-align:center; margin:6px auto 12px }
+    .net.ok{ background:#dcfce7; color:#065f46 }
+    .hint{ color:var(--muted); font-size:.9rem; margin-top:4px }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧾 Registro de Compra</h1>
+    <div id="direccionDepto" class="sub">Dirección del departamento</div>
+    <div id="net" class="net hidden">Sin conexión</div>
+
+    <div class="card">
+      <form id="form" novalidate>
+        <!-- Hidden (QS) -->
+        <input type="hidden" id="departamento" name="departamento" />
+        <input type="hidden" id="reporta" name="reporta" />
+
+        <!-- PAGO ARS -->
+        <label for="pagoDisplay">Pago ARS *</label>
+        <input id="pagoDisplay" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" />
+        <div class="hint">Se mostrará con separadores (ej: 12.345,67), pero enviaremos solo el número a Notion.</div>
+        <input id="pago_ars" name="pago_ars" type="hidden" />
+
+        <!-- COMPROBANTES -->
+        <label>Comprobantes (fotos) *</label>
+        <div id="camComprobantes" class="cam"></div>
+
+        <!-- ITEMS COMPRADOS -->
+        <label>Items comprados (fotos) *</label>
+        <div id="camItems" class="cam"></div>
+
+        <div class="row" style="margin-top:16px">
+          <button id="submitBtn" class="secondary" type="submit">Enviar</button>
+        </div>
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ========================
+    // CONFIG & UTILIDADES
+    // ========================
+    const qs = new URLSearchParams(location.search);
+    const depQS = (qs.get('departamento') || '').trim();
+    const repQS = (qs.get('reporta') || '').trim();
+    const WEBHOOK_URL = 'https://optimaltm.app.n8n.cloud/webhook/wba-reporte-compra';
+
+    const netEl = document.getElementById('net');
+    const statusEl = document.getElementById('status');
+    const submitBtn = document.getElementById('submitBtn');
+
+    if (depQS) {
+      document.getElementById('departamento').value = depQS;
+      document.getElementById('direccionDepto').textContent = depQS;
+    }
+    if (repQS) document.getElementById('reporta').value = repQS;
+
+    function ok(msg){ statusEl.innerHTML = `<span class="ok">${msg}</span>`; }
+    function err(msg){ statusEl.innerHTML = `<span class="error">${msg}</span>`; }
+
+    // ========================
+    // FORMATO MONEDA (es-AR)
+    // ========================
+    const pagoDisplay = document.getElementById('pagoDisplay');
+    const pagoHidden  = document.getElementById('pago_ars');
+
+    function toNum(v){
+      if (v == null) return 0;
+      const s = String(v).replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.').replace(/[^0-9.\-]/g,'');
+      const n = parseFloat(s);
+      return isFinite(n) ? n : 0;
+    }
+    function formatARS(n){
+      try{ return new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0); }
+      catch{ return (n || 0).toFixed(2); }
+    }
+    function syncPagoFromDisplay(){
+      const n = toNum(pagoDisplay.value);
+      pagoHidden.value = String(n);
+      // rehacer formato amigable sin cambiar la posición del cursor en exceso
+      const start = pagoDisplay.selectionStart;
+      pagoDisplay.value = formatARS(n);
+      // mejor esfuerzo
+      try{ pagoDisplay.setSelectionRange(start, start); }catch{}
+    }
+    pagoDisplay.addEventListener('input', syncPagoFromDisplay);
+    pagoDisplay.addEventListener('blur', syncPagoFromDisplay);
+
+    // ========================
+    // COMPONENTE CÁMARA (reutilizable)
+    // ========================
+    function createCameraSection(rootId, fieldName){
+      const root = document.getElementById(rootId);
+      root.innerHTML = `
+        <video playsinline autoplay muted class="hidden"></video>
+        <div class="row">
+          <button type="button" data-action="shot">📸 Tomar foto</button>
+          <button type="button" data-action="flip">🔄 Cambiar cámara</button>
+        </div>
+        <div class="thumbs" data-role="thumbs"></div>
+        <div class="file-fallback hidden" data-role="fallbackNote">No pudimos acceder a la cámara. Usá este campo (intentará abrir la cámara del dispositivo):</div>
+        <input class="hidden" type="file" accept="image/*" capture="environment" multiple data-role="fallbackInput">
+      `;
+
+      const video = root.querySelector('video');
+      const btnShot = root.querySelector('[data-action=shot]');
+      const btnFlip = root.querySelector('[data-action=flip]');
+      const thumbs = root.querySelector('[data-role=thumbs]');
+      const fallbackInput = root.querySelector('[data-role=fallbackInput]');
+      const fallbackNote = root.querySelector('[data-role=fallbackNote]');
+
+      const MB = 1024*1024; const MAX_FILES=10; const MAX_FILE_MB=20;
+      let stream=null; let usingEnv=true; const shots=[]; // {blob,url}
+
+      async function startCamera(){
+        try{
+          if (stream) stream.getTracks().forEach(t=>t.stop());
+          stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode: usingEnv?{ exact:'environment' }:'user' }, audio:false });
+          video.srcObject = stream; video.classList.remove('hidden');
+          fallbackInput.classList.add('hidden'); fallbackNote.classList.add('hidden');
+        }catch(e){
+          video.classList.add('hidden');
+          fallbackNote.classList.remove('hidden'); fallbackInput.classList.remove('hidden');
+        }
+      }
+
+      function addThumb(blob){
+        const url = URL.createObjectURL(blob);
+        shots.push({ blob, url });
+        const div = document.createElement('div');
+        div.className = 'thumb';
+        div.innerHTML = `<img src="${url}" alt="foto"><button type="button">✕</button>`;
+        div.querySelector('button').onclick = () => {
+          const i = shots.findIndex(s => s.url === url);
+          if (i>=0){ URL.revokeObjectURL(shots[i].url); shots.splice(i,1); }
+          div.remove();
+        };
+        thumbs.appendChild(div);
+      }
+
+      btnShot.addEventListener('click', async () => {
+        statusEl.textContent = '';
+        if (shots.length >= MAX_FILES) return err(`Máximo ${MAX_FILES} fotos.`);
+        const rect = video.getBoundingClientRect();
+        const w = video.videoWidth || rect.width; const h = video.videoHeight || rect.height;
+        const canvas = Object.assign(document.createElement('canvas'), { width:w, height:h });
+        canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.92));
+        if (!blob) return err('No se pudo capturar la foto.');
+        if (blob.size > MAX_FILE_MB*MB) return err(`La foto supera ${MAX_FILE_MB} MB.`);
+        addThumb(blob);
+      });
+
+      btnFlip.addEventListener('click', async () => { usingEnv=!usingEnv; await startCamera(); });
+      if (navigator.mediaDevices?.getUserMedia) startCamera();
+      else { video.classList.add('hidden'); fallbackNote.classList.remove('hidden'); fallbackInput.classList.remove('hidden'); }
+
+      function gatherFiles(){
+        const out=[];
+        if (!fallbackInput.classList.contains('hidden')){
+          const files = Array.from(fallbackInput.files || []);
+          for (const f of files) out.push({ name:`${fieldName}-${f.name}`, type:f.type, blob:f });
+        } else {
+          for (let i=0;i<shots.length;i++){
+            const b = shots[i].blob; out.push({ name:`${fieldName}-foto-${i+1}.jpg`, type: b.type||'image/jpeg', blob:b });
+          }
+        }
+        return out;
+      }
+
+      return { gatherFiles };
+    }
+
+    const camComprobantes = createCameraSection('camComprobantes', 'comprobantes');
+    const camItems        = createCameraSection('camItems', 'items');
+
+    // ========================
+    // INDEXEDDB (borrador + cola)
+    // ========================
+    const DB_NAME = 'wba-registro-compra';
+    const DB_VERSION = 1; let dbPromise = null;
+    function openDB(){ if (dbPromise) return dbPromise; dbPromise = new Promise((resolve,reject)=>{ const req = indexedDB.open(DB_NAME, DB_VERSION); req.onupgradeneeded = ()=>{ const db=req.result; if(!db.objectStoreNames.contains('draft')) db.createObjectStore('draft',{keyPath:'id'}); if(!db.objectStoreNames.contains('queue')) db.createObjectStore('queue',{keyPath:'id', autoIncrement:true}); }; req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error); }); return dbPromise; }
+    async function dbPut(store, value){ const db=await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction(store,'readwrite'); tx.objectStore(store).put(value); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
+    async function dbGet(store, key){ const db=await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction(store,'readonly'); const req=tx.objectStore(store).get(key); req.onsuccess=()=>res(req.result||null); req.onerror=()=>rej(req.error); }); }
+    async function dbGetAll(store){ const db=await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction(store,'readonly'); const req=tx.objectStore(store).getAll(); req.onsuccess=()=>res(req.result||[]); req.onerror=()=>rej(req.error); }); }
+    async function dbDelete(store, key){ const db=await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction(store,'readwrite'); tx.objectStore(store).delete(key); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
+
+    async function saveDraft(payload){ await dbPut('draft', { id:'current', ts:Date.now(), ...payload }); }
+    async function restoreDraftIfEmpty(){ const d = await dbGet('draft','current'); if (!d) return; if (pagoDisplay.value==="") { pagoDisplay.value = formatARS(toNum(d.pago_ars||0)); pagoHidden.value = String(toNum(d.pago_ars||0)); }
+      // No restauramos imágenes por simplicidad (URLs temporales). Si hace falta, puedo extenderlo.
+    }
+    async function enqueue(payload){ await dbPut('queue', payload); }
+    async function flushQueue(){ if (!navigator.onLine) return; const items = await dbGetAll('queue'); if (!items.length) return; let okCount=0; for (const item of items){ try{ const sent = await sendPayload(item); if (sent.ok){ await dbDelete('queue', item.id); okCount++; } else { break; } }catch{ break; } } if (okCount>0) ok(`Se enviaron ${okCount} reporte(s) pendientes.`); }
+
+    // ========================
+    // RED: indicador y eventos
+    // ========================
+    function updateNet(){ if (navigator.onLine){ netEl.textContent='Conectado'; netEl.classList.remove('hidden'); netEl.classList.add('ok'); setTimeout(()=>netEl.classList.add('hidden'), 1200); flushQueue(); } else { netEl.textContent='Sin conexión — podés guardar y lo enviamos cuando vuelva internet'; netEl.classList.remove('ok','hidden'); } }
+    window.addEventListener('online', updateNet); window.addEventListener('offline', updateNet); updateNet();
+
+    // ========================
+    // ARMAR PAYLOAD + ENVÍO
+    // ========================
+    function buildPayload(){
+      // pago_ars ya viene normalizado en hidden (punto decimal)
+      return {
+        departamento: depQS,
+        reporta: repQS,
+        pago_ars: document.getElementById('pago_ars').value || '0',
+        comprobantes: camComprobantes.gatherFiles(),
+        items: camItems.gatherFiles(),
+      };
+    }
+
+    async function sendPayload(payload){
+      const fd = new FormData();
+      fd.append('departamento', payload.departamento);
+      fd.append('reporta', payload.reporta);
+      fd.append('pago_ars', payload.pago_ars);
+      for (const f of payload.comprobantes) fd.append('comprobantes[]', f.blob, f.name);
+      for (const f of payload.items)         fd.append('items[]',         f.blob, f.name);
+
+      const controller = new AbortController(); const to = setTimeout(()=>controller.abort(), 15000);
+      try{
+        const res = await fetch(WEBHOOK_URL, { method:'POST', body: fd, signal: controller.signal });
+        clearTimeout(to);
+        const text = await res.text().catch(()=> '');
+        let data = null; try{ data = JSON.parse(text); } catch{}
+        if (!res.ok) throw new Error(data?.message || text || `HTTP ${res.status} ${res.statusText}`);
+        return { ok: !!data?.ok, redirect: data?.redirect || null };
+      }catch(e){ clearTimeout(to);
+        if (!navigator.onLine || e.name === 'AbortError' || /Failed to fetch|NetworkError/i.test(String(e.message))) throw e; // red
+        return { ok:false };
+      }
+    }
+
+    // ========================
+    // SUBMIT
+    // ========================
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault(); statusEl.classList.remove('error','ok');
+
+      if (!depQS)  return err('Falta “departamento”.');
+      if (!repQS)  return err('Falta “reporta”.');
+      syncPagoFromDisplay();
+      const pago = toNum(pagoHidden.value);
+      if (!(pago>0)) return err('Ingresá un monto válido (> 0).');
+
+      const payload = buildPayload();
+      if (!payload.comprobantes.length) return err('Adjuntá al menos una foto de comprobante.');
+      if (!payload.items.length)        return err('Adjuntá al menos una foto de ítems comprados.');
+
+      submitBtn.classList.add('busy'); statusEl.textContent = 'Enviando…';
+
+      if (!navigator.onLine){ await saveDraft(payload); await enqueue(payload); ok('Sin conexión: guardamos el registro para enviarlo automáticamente cuando vuelva internet.'); submitBtn.classList.remove('busy'); return; }
+
+      try{ const sent = await sendPayload(payload);
+        if (sent.ok && sent.redirect){ await dbPut('draft',{ id:'current', ts:Date.now() }); window.location.href = sent.redirect; return; }
+        await saveDraft(payload); await enqueue(payload); err('No pudimos confirmar el envío. Lo guardamos y reintentaremos automáticamente.');
+      }catch(e){ await saveDraft(payload); await enqueue(payload); err('No hay conexión o la red está inestable. Guardamos el registro y lo enviaremos automáticamente.'); }
+      finally{ submitBtn.classList.remove('busy'); }
+    });
+
+    // Al iniciar
+    restoreDraftIfEmpty();
+    flushQueue();
+  </script>
+</body>
+</html>
