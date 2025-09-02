@@ -27,8 +27,7 @@
     .file-input input[type=file]{display:none}
     .file-btn{
       appearance:none;border:0;border-radius:12px;padding:14px 16px;
-      background:var(--primary);color:#fff;font-weight:600;cursor:pointer;
-      text-align:center
+      background:var(--primary);color:#fff;font-weight:600;cursor:pointer;text-align:center
     }
     .file-btn:active{transform:translateY(1px)}
     .file-list{color:var(--muted);font-size:.9rem}
@@ -40,46 +39,46 @@
 </head>
 <body>
   <div class="container">
-    <h1>🔧 Reporte de Problema de mantenimiento</h1>
-    <div id="direccionDepto" class="sub">Dirección del departamento</div>
+      <h1>🔧 Reporte de Problema de mantenimiento</h1>
+      <div id="direccionDepto" class="sub">Dirección del departamento</div>
 
-    <div class="card">
-      <form id="form" method="POST" action="https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento" enctype="multipart/form-data" novalidate>
-        
-        <!-- Hidden: viajan a n8n -->
-        <input type="hidden" id="departamento" name="departamento" />
-        <input type="hidden" id="reporta" name="reporta" />
+      <div class="card">
+        <form id="form" method="POST" action="https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento" enctype="multipart/form-data" novalidate>
+          <!-- Hidden: viajan a n8n -->
+          <input type="hidden" id="departamento" name="departamento" />
+          <input type="hidden" id="reporta" name="reporta" />
 
-        <label for="descripcion">Detalle del problema *</label>
-        <textarea id="descripcion" name="descripcion" placeholder="Contanos qué pasó, dónde y desde cuándo…" required></textarea>
+          <label for="descripcion">Detalle del problema *</label>
+          <textarea id="descripcion" name="descripcion" placeholder="Contanos qué pasó, dónde y desde cuándo…" required></textarea>
 
-        <label for="media">Adjuntar fotos o videos *</label>
-        <div class="file-row">
-          <div class="file-input">
-            <input id="media" name="media" type="file" accept="image/*,video/*" capture multiple required />
-            <button type="button" class="file-btn" id="pickFile">📷 Sacar foto o video</button>
+          <label for="media">Adjuntar fotos o videos *</label>
+          <div class="file-row">
+            <div class="file-input">
+              <!-- MULTI: name como array y SIN capture -->
+              <input id="media" name="media[]" type="file" accept="image/*,video/*" multiple required />
+              <button type="button" class="file-btn" id="pickFile">📷 Elegir/Agregar archivos</button>
+            </div>
+            <div class="file-list" id="fileList">Ningún archivo seleccionado</div>
           </div>
-          <div class="file-list" id="fileList">Ningún archivo seleccionado</div>
-        </div>
 
-        <button class="submit" type="submit">Enviar reporte</button>
-        <div id="status" class="status" role="status" aria-live="polite"></div>
-      </form>
-    </div>
+          <button class="submit" type="submit">Enviar reporte</button>
+          <div id="status" class="status" role="status" aria-live="polite"></div>
+        </form>
+      </div>
   </div>
 
   <script>
     // --- Utilidades ---
     const MB = 1024 * 1024;
-    const MAX_FILE_MB = 20;          // Límite por archivo (evita 413 y límites de Notion)
-    const MAX_FILES = 10;            // Límite razonable de cantidad
+    const MAX_FILE_MB = 20;   // límite por archivo
+    const MAX_FILES = 10;     // límite de cantidad
 
     const qs = new URLSearchParams(location.search);
     const getQS = (k) => (qs.get(k) ?? '').trim();
 
     // --- Cargar parámetros desde la URL ---
     const depQS = getQS('departamento');
-    const repQS = getQS('reporta');  // <-- ahora también tomamos 'reporta'
+    const repQS = getQS('reporta');
 
     if (depQS) {
       document.getElementById('departamento').value = depQS;
@@ -91,11 +90,11 @@
 
     // --- Manejo de archivos seleccionados ---
     const fileInput = document.getElementById('media');
-    const fileBtn = document.getElementById('pickFile');
-    const fileList = document.getElementById('fileList');
-    const statusEl = document.getElementById('status');
+    const fileBtn   = document.getElementById('pickFile');
+    const fileList  = document.getElementById('fileList');
+    const statusEl  = document.getElementById('status');
 
-    fileBtn.addEventListener('click', () => fileInput.click());
+    fileBtn.addEventListener('click', () => fileInput.showPicker ? fileInput.showPicker() : fileInput.click());
 
     fileInput.addEventListener('change', () => {
       statusEl.textContent = '';
@@ -104,7 +103,6 @@
         fileList.textContent = 'Ningún archivo seleccionado';
         return;
       }
-      // Validaciones
       if (files.length > MAX_FILES) {
         statusEl.innerHTML = `<span class="error">Máximo ${MAX_FILES} archivos por reporte.</span>`;
         fileInput.value = '';
@@ -118,14 +116,13 @@
         fileList.textContent = 'Ningún archivo seleccionado';
         return;
       }
-      // Mostrar listado nombre + tamaño
       fileList.textContent = files.map(f => `${f.name} (${(f.size/MB).toFixed(1)} MB)`).join(', ');
     });
 
     // --- Validación y envío ---
     document.getElementById('form').addEventListener('submit', (e) => {
       statusEl.classList.remove('error','ok');
-      const desc = document.getElementById('descripcion').value.trim();
+      const desc  = document.getElementById('descripcion').value.trim();
       const files = fileInput.files;
 
       if (!depQS) {
@@ -148,7 +145,6 @@
         statusEl.innerHTML = '<span class="error">Adjuntá al menos una foto o video.</span>';
         return;
       }
-      // Revalido tamaños por las dudas
       for (const f of files) {
         if (f.size > MAX_FILE_MB * MB) {
           e.preventDefault();
@@ -156,9 +152,8 @@
           return;
         }
       }
-
-      statusEl.innerHTML = 'Enviando…';
-      // Con form POST nativo, el navegador sigue automáticamente 302/303 hacia gracias.html
+      statusEl.textContent = 'Enviando…';
+      // El navegador envía multipart/form-data con múltiples partes "media[]"
     });
   </script>
 </body>
