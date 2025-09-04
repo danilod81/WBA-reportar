@@ -7,7 +7,7 @@
   <style>
     :root{ --bg:#f6f7fb; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#2563eb; --border:#e5e7eb; }
     *{ box-sizing:border-box }
-    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:#111827; line-height:1.5; }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
     .container{ max-width:680px; margin:0 auto; padding:20px 16px 40px }
     h1{ text-align:center; font-size:clamp(1.25rem,4.8vw,1.8rem); font-weight:800; margin:6px 0 2px }
     .sub{ text-align:center; margin:2px 0 16px; color:var(--muted); font-size:.98rem; min-height:1.4em }
@@ -42,8 +42,8 @@
     <div id="net" class="net hidden">Sin conexión</div>
 
     <div class="card">
-      <!-- Enviamos con fetch para adjuntar Blobs -->
       <form id="form" novalidate>
+        <!-- Hidden (QS) -->
         <input type="hidden" id="departamento" name="departamento" />
         <input type="hidden" id="reporta" name="reporta" />
         <input type="hidden" id="reg" name="reg" /> <!-- NUEVO -->
@@ -52,8 +52,6 @@
         <textarea id="descripcion" name="descripcion" placeholder="Contanos qué pasó, dónde y desde cuándo…" required></textarea>
 
         <label>Fotos (sacadas ahora) *</label>
-
-        <!-- UI de cámara -->
         <div id="cameraBox" class="cam">
           <video id="preview" playsinline autoplay muted></video>
           <div class="row">
@@ -62,7 +60,6 @@
           </div>
           <div id="thumbs" class="thumbs"></div>
           <div class="file-fallback hidden" id="fallbackNote">No pudimos acceder a la cámara. Usá este campo (intentará abrir la cámara del dispositivo):</div>
-          <!-- Fallback: intenta cámara del SO; algunos navegadores permiten galería -->
           <input id="fallbackInput" class="hidden" type="file" name="media[]" accept="image/*" capture="environment" multiple>
         </div>
 
@@ -81,7 +78,7 @@
     const qs = new URLSearchParams(location.search);
     const depQS = (qs.get('departamento') || '').trim();
     const repQS = (qs.get('reporta') || '').trim();
-    const regQS = (qs.get('reg') || '').trim();            // ← NUEVO
+    const regQS = (qs.get('reg') || '').trim(); // NUEVO
     const WEBHOOK_URL = 'https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento';
 
     const netEl = document.getElementById('net');
@@ -93,7 +90,7 @@
       document.getElementById('direccionDepto').textContent = depQS;
     }
     if (repQS) document.getElementById('reporta').value = repQS;
-    if (regQS) document.getElementById('reg').value = regQS; // ← NUEVO
+    if (regQS) document.getElementById('reg').value = regQS; // NUEVO
 
     function ok(msg){ statusEl.innerHTML = `<span class="ok">${msg}</span>`; }
     function err(msg){ statusEl.innerHTML = `<span class="error">${msg}</span>`; }
@@ -162,11 +159,7 @@
       addThumb(blob);
     });
 
-    btnFlip.addEventListener('click', async () => {
-      usingEnv = !usingEnv;
-      await startCamera();
-    });
-
+    btnFlip.addEventListener('click', async () => { usingEnv = !usingEnv; await startCamera(); });
     if (navigator.mediaDevices?.getUserMedia) startCamera();
     else { video.classList.add('hidden'); fallbackNote.classList.remove('hidden'); fallbackInput.classList.remove('hidden'); }
 
@@ -203,6 +196,7 @@
       if (!d) return;
       const descEl = document.getElementById('descripcion');
       if (!descEl.value) descEl.value = d.descripcion || '';
+      // No restauramos imágenes (URLs temporales)
     }
     async function enqueue(payload){ await dbPut('queue', payload); }
     async function flushQueue(){
@@ -221,13 +215,12 @@
     }
 
     // ========================
-    // RED: indicador y eventos
+    // RED
     // ========================
     function updateNet(){
       if (navigator.onLine){
         netEl.textContent = 'Conectado';
-        netEl.classList.remove('hidden');
-        netEl.classList.add('ok');
+        netEl.classList.remove('hidden'); netEl.classList.add('ok');
         setTimeout(()=>netEl.classList.add('hidden'), 1200);
         flushQueue();
       } else {
@@ -261,7 +254,7 @@
       return {
         departamento: depQS,
         reporta: repQS,
-        reg: regQS,                 // ← NUEVO
+        reg: regQS, // NUEVO
         descripcion: desc,
         files: gatherFiles(),
       };
@@ -271,7 +264,7 @@
       const fd = new FormData();
       fd.append('departamento', payload.departamento);
       fd.append('reporta', payload.reporta);
-      fd.append('reg', payload.reg || '');         // ← NUEVO
+      fd.append('reg', payload.reg || '');      // NUEVO
       fd.append('descripcion', payload.descripcion);
       for (const f of payload.files) fd.append('media[]', f.blob, f.name);
 
@@ -284,12 +277,10 @@
         const text = await res.text().catch(()=> '');
         let data = null; try{ data = JSON.parse(text); } catch{}
         if (!res.ok) throw new Error(data?.message || text || `HTTP ${res.status} ${res.statusText}`);
-        return { ok: !!data?.ok, redirect: data?.redirect || null };
+        return { ok: true, data };
       }catch(e){
         clearTimeout(to);
-        if (!navigator.onLine || e.name === 'AbortError' || /Failed to fetch|NetworkError/i.test(String(e.message))) {
-          throw e;
-        }
+        if (!navigator.onLine || e.name === 'AbortError' || /Failed to fetch|NetworkError/i.test(String(e.message))) throw e;
         return { ok:false };
       }
     }
@@ -313,26 +304,20 @@
       statusEl.textContent = 'Enviando…';
 
       if (!navigator.onLine){
-        await saveDraft(payload);
-        await enqueue(payload);
-        ok('Sin conexión: guardamos el reporte para enviarlo automáticamente cuando vuelva internet.');
+        await saveDraft(payload); await enqueue(payload);
+        ok('Sin conexión: guardamos el reporte y lo enviaremos automáticamente.');
         submitBtn.classList.remove('busy');
         return;
       }
 
       try{
         const sent = await sendPayload(payload);
-        if (sent.ok && sent.redirect) {
-          await dbPut('draft',{ id:'current', ts:Date.now() });
-          window.location.href = sent.redirect;
-          return;
-        }
-        await saveDraft(payload); await enqueue(payload);
-        err('No pudimos confirmar el envío. Lo guardamos y reintentaremos automáticamente.');
+        if (!sent.ok) throw new Error('No confirmado');
+        ok('Enviado ✅');
       }catch(e){
         await saveDraft(payload); await enqueue(payload);
-        err('No hay conexión o la red está inestable. Guardamos el reporte y lo enviaremos automáticamente.');
-      }finally{
+        err('No pudimos confirmar el envío. Lo guardamos y reintentaremos automáticamente.');
+      } finally {
         submitBtn.classList.remove('busy');
       }
     });
