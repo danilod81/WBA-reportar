@@ -1,4 +1,4 @@
-<!-- ===================== reportar-compra.html (versión estable: envío con multipart/form-data) ===================== -->
+<!-- ===================== reportar-compra.html (PRO: cámara fullscreen + múltiples fotos por grupo) ===================== -->
 <!doctype html>
 <html lang="es">
 <head>
@@ -6,25 +6,42 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Registro de Compra</title>
   <style>
-    :root{ --bg:#f6f7fb; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#2563eb; --border:#e5e7eb; }
+    :root{ --bg:#f6f7fb; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#2563eb; --border:#e5e7eb; --danger:#b91c1c; --ok:#065f46; }
     *{ box-sizing:border-box }
     body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
-    .container{ max-width:680px; margin:0 auto; padding:20px 16px 40px }
+    .container{ max-width:680px; margin:0 auto; padding:20px 16px 56px }
     h1{ text-align:center; font-size:clamp(1.25rem,4.8vw,1.8rem); font-weight:800; margin:6px 0 2px }
     .sub{ text-align:center; margin:2px 0 16px; color:var(--muted); font-size:.98rem; min-height:1.4em }
     .card{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px }
     label{ display:block; margin:18px 0 8px; font-weight:600 }
-    input[type=text], input[type=number], input[type=file]{ width:100%; padding:14px; border:1px solid var(--border); border-radius:12px; font-size:1rem; }
+    input[type=text]{ width:100%; padding:14px; border:1px solid var(--border); border-radius:12px; font-size:1rem; }
     input:focus{ outline:none; border-color:#9ec1ff; box-shadow:0 0 0 3px rgba(37,99,235,.15) }
     .row{ display:flex; gap:10px; flex-wrap:wrap }
     button{ appearance:none; border:0; border-radius:12px; padding:14px 16px; background:var(--primary); color:#fff; font-weight:600; cursor:pointer }
     .secondary{ background:#111827 }
+    .muted-btn{ background:#e5e7eb; color:#111827 }
+    .danger{ background:var(--danger) }
     .status{ margin-top:10px; color:var(--muted); text-align:center; font-size:.95rem; min-height:1.5em }
-    .error{ color:#b91c1c } .ok{ color:#065f46 } .hidden{ display:none }
+    .error{ color:var(--danger) } .ok{ color:var(--ok) } .hidden{ display:none }
     .net{ position:sticky; top:0; padding:8px 12px; border-radius:10px; background:#fee2e2; color:#991b1b; text-align:center; margin:6px auto 12px }
     .net.ok{ background:#dcfce7; color:#065f46 }
     .hint{ color:var(--muted); font-size:.9rem; margin-top:4px }
     .mini{ font-size:.85rem; color:#6b7280 }
+    .thumbs{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px }
+    .thumb{ position:relative; width:96px; height:96px; border-radius:10px; overflow:hidden; border:1px solid var(--border); background:#000 }
+    .thumb img{ width:100%; height:100%; object-fit:cover }
+    .thumb button{ position:absolute; top:4px; right:4px; padding:4px 8px; font-size:.8rem; border-radius:8px }
+
+    /* ====== Overlay cámara ====== */
+    .overlay{ position:fixed; inset:0; background:#000; display:none; z-index:1000; }
+    .overlay.show{ display:flex; align-items:center; justify-content:center; }
+    .cam-wrap{ position:relative; width:100%; height:100%; display:flex; flex-direction:column; }
+    .cam-video{ flex:1; position:relative; }
+    video{ width:100%; height:100%; object-fit:cover; }
+    .cam-ui{ position:absolute; left:0; right:0; bottom:0; display:flex; gap:10px; padding:12px; background:linear-gradient(180deg, transparent, rgba(0,0,0,.6)); justify-content:center; }
+    .cam-ui button{ min-width:120px; border-radius:999px; padding:14px 18px; font-size:1.05rem; }
+    .cam-title{ position:absolute; top:0; left:0; right:0; text-align:center; color:#fff; padding:12px; background:linear-gradient(180deg, rgba(0,0,0,.6), transparent); font-weight:700 }
+    .ghost{ opacity:.85 }
   </style>
 </head>
 <body>
@@ -34,85 +51,230 @@
     <div id="net" class="net hidden">Sin conexión</div>
 
     <div class="card">
-      <!-- IMPORTANTE: method POST + enctype multipart para permitir archivos -->
       <form id="form" method="post" enctype="multipart/form-data" novalidate>
-        <!-- Hidden (QS) -->
+        <!-- Hidden (QS / idempotencia) -->
         <input type="hidden" id="departamento" name="departamento" />
         <input type="hidden" id="reporta" name="reporta" />
         <input type="hidden" id="reg" name="reg" />
+        <input type="hidden" id="pago_ars" name="pago_ars" />
 
         <!-- PAGO ARS -->
         <label for="pagoDisplay">Pago ARS *</label>
         <input id="pagoDisplay" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" />
-        <div class="hint">Se mostrará con separadores (ej: 12.345,67), pero enviaremos solo el número a Notion.</div>
-        <input id="pago_ars" name="pago_ars" type="hidden" />
+        <div class="hint">Se muestra con separadores (12.345,67) pero se envía como número.</div>
 
         <!-- COMPROBANTES -->
-        <label for="filesComprobantes">Comprobantes (fotos) *</label>
-        <input id="filesComprobantes" type="file" accept="image/*" multiple name="comprobantes[]" />
+        <label>Comprobantes (fotos) *</label>
+        <div class="row">
+          <button type="button" id="btnCamA">Sacar comprobante</button>
+          <button type="button" id="btnFileA" class="muted-btn">Subir archivo (solo si no hay cámara)</button>
+          <input id="filesComprobantes" class="hidden" type="file" accept="image/*" multiple name="comprobantes[]" />
+        </div>
+        <div id="thumbsA" class="thumbs"></div>
 
         <!-- ITEMS COMPRADOS -->
-        <label for="filesItems">Items comprados (fotos) *</label>
-        <input id="filesItems" type="file" accept="image/*" multiple name="items[]" />
+        <label>Items comprados (fotos) *</label>
+        <div class="row">
+          <button type="button" id="btnCamB">Sacar item</button>
+          <button type="button" id="btnFileB" class="muted-btn">Subir archivo (solo si no hay cámara)</button>
+          <input id="filesItems" class="hidden" type="file" accept="image/*" multiple name="items[]" />
+        </div>
+        <div id="thumbsB" class="thumbs"></div>
 
         <div class="row" style="margin-top:16px">
           <button id="submitBtn" class="secondary" type="submit">Enviar</button>
         </div>
         <div id="status" class="status" role="status" aria-live="polite"></div>
       </form>
-      <div class="mini">Tip: si algo falla, revisá conexión y que haya al menos 1 foto en cada grupo.</div>
+      <div class="mini">Tip: sacá una foto a la vez. Si la cámara no está disponible, podés subir archivos.</div>
+    </div>
+  </div>
+
+  <!-- ====== Overlay Cámara ====== -->
+  <div id="overlay" class="overlay">
+    <div class="cam-wrap">
+      <div class="cam-title" id="camTitle">Cámara</div>
+      <div class="cam-video">
+        <video id="video" playsinline autoplay></video>
+      </div>
+      <div class="cam-ui">
+        <button type="button" id="btnClose" class="muted-btn">Cancelar</button>
+        <button type="button" id="btnShot" class="secondary">Sacar foto</button>
+        <button type="button" id="btnUse" class="ghost">Usar foto</button>
+      </div>
     </div>
   </div>
 
   <script>
-    // ======================== CONFIG ========================
+    /* ======================== CONFIG ======================== */
     var WEBHOOK_URL = 'https://optimaltm.app.n8n.cloud/webhook/wba-reporte-compra';
 
-    // --- helpers de storage (sin optional chaining) ---
-    function getLS(k){ try { return window.localStorage.getItem(k); } catch(e){ return null; } }
-    function setLS(k,v){ try { window.localStorage.setItem(k,v); } catch(e){} }
+    /* ======================== Helpers básicos ======================== */
+    function getLS(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+    function setLS(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+    function toNum(v){ if (v==null) return 0; var s=String(v).replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.').replace(/[^0-9.\-]/g,''); var n=parseFloat(s); return isFinite(n)?n:0; }
+    function formatARS(n){ try { return new Intl.NumberFormat('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);} catch(e){ return (n||0).toFixed(2);} }
+    function uuid(){
+      try{
+        if (crypto && crypto.randomUUID) return crypto.randomUUID();
+        if (crypto && crypto.getRandomValues){ var a=new Uint8Array(16); crypto.getRandomValues(a); a[6]=(a[6]&0x0f)|0x40; a[8]=(a[8]&0x3f)|0x80; return Array.from(a).map((v,i)=> (i===4||i===6||i===8||i===10?'-':'')+('0'+v.toString(16)).slice(-2)).join(''); }
+      }catch(_){} return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});
+    }
 
-    // ======================== QS ========================
-    var qs = new URLSearchParams(window.location.search || '');
+    /* ======================== QS e idempotencia ======================== */
+    var qs = new URLSearchParams(location.search || '');
     var depQS = (qs.get('departamento') || '').trim();
     var repQS = (qs.get('reporta') || '').trim();
     var regQS = (qs.get('reg') || '').trim();
 
-    if (depQS){ document.getElementById('departamento').value = depQS; document.getElementById('direccionDepto').textContent = depQS; }
-    if (repQS){ document.getElementById('reporta').value = repQS; }
-
-    // ======================== Idempotencia segura ========================
-    function uuid(){
-      try {
-        if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
-        if (window.crypto && window.crypto.getRandomValues){
-          var a = new Uint8Array(16); window.crypto.getRandomValues(a);
-          a[6] = (a[6] & 0x0f) | 0x40; a[8] = (a[8] & 0x3f) | 0x80;
-          var b = Array.from(a).map(function(v,i){return (i===4||i===6||i===8||i===10?'-':'') + ('0'+v.toString(16)).slice(-2)}).join('');
-          return b.replace(/-/g,'').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12}).*$/,'$1-$2-$3-$4-$5');
-        }
-      } catch(e){}
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});
-    }
-    if (!regQS){ regQS = getLS('wba_pending_reg') || uuid(); }
-    document.getElementById('reg').value = regQS; setLS('wba_pending_reg', regQS);
-
-    // ======================== MONEDA ========================
+    var depEl = document.getElementById('departamento');
+    var repEl = document.getElementById('reporta');
+    var regEl = document.getElementById('reg');
+    var pagoEl = document.getElementById('pago_ars');
     var pagoDisplay = document.getElementById('pagoDisplay');
-    var pagoHidden  = document.getElementById('pago_ars');
 
-    function toNum(v){ if (v==null) return 0; var s=String(v).replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.').replace(/[^0-9.\-]/g,''); var n=parseFloat(s); return isFinite(n)?n:0; }
-    function formatARS(n){ try { return new Intl.NumberFormat('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);} catch(e){ return (n||0).toFixed(2);} }
-    function syncPagoFromDisplay(){ var n=toNum(pagoDisplay.value); pagoHidden.value=String(n); try{ var start=pagoDisplay.selectionStart; pagoDisplay.value=formatARS(n); pagoDisplay.setSelectionRange(start,start);}catch(e){ pagoDisplay.value=formatARS(n);} }
-    pagoDisplay.addEventListener('input', syncPagoFromDisplay);
-    pagoDisplay.addEventListener('blur',  syncPagoFromDisplay);
+    if (depQS){ depEl.value = depQS; document.getElementById('direccionDepto').textContent = depQS; }
+    if (repQS){ repEl.value = repQS; }
+    if (!regQS){ regQS = getLS('wba_pending_reg') || uuid(); }
+    regEl.value = regQS; setLS('wba_pending_reg', regQS);
 
-    // ======================== Estado de red ========================
+    function syncPago(){ var n=toNum(pagoDisplay.value); pagoEl.value=String(n); try{ var p=pagoDisplay.selectionStart; pagoDisplay.value=formatARS(n); pagoDisplay.setSelectionRange(p,p);}catch(e){ pagoDisplay.value=formatARS(n);} }
+    pagoDisplay.addEventListener('input', syncPago);
+    pagoDisplay.addEventListener('blur',  syncPago);
+
+    /* ======================== Estado de red ======================== */
     var netEl = document.getElementById('net');
     function updNet(){ var on = navigator.onLine; netEl.classList.toggle('hidden', on); netEl.textContent = on ? '' : 'Sin conexión'; }
-    window.addEventListener('online', updNet); window.addEventListener('offline', updNet); updNet();
+    addEventListener('online',  updNet); addEventListener('offline', updNet); updNet();
 
-    // ======================== Envío ========================
+    /* ======================== Cámara PRO ======================== */
+    var overlay = document.getElementById('overlay');
+    var video = document.getElementById('video');
+    var camTitle = document.getElementById('camTitle');
+    var btnClose = document.getElementById('btnClose');
+    var btnShot = document.getElementById('btnShot');
+    var btnUse = document.getElementById('btnUse');
+    var stream = null;
+    var lastShot = null;   // { blob, url }
+    var activeGroup = null; // 'A' o 'B'
+
+    // Arrays de blobs (cada uno con .name para filename)
+    var photosA = []; // comprobantes
+    var photosB = []; // items
+
+    // UI referencias
+    var thumbsA = document.getElementById('thumbsA');
+    var thumbsB = document.getElementById('thumbsB');
+
+    function canUseCamera(){
+      return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    }
+
+    async function openCamera(group){
+      if (!canUseCamera()) { // fallback a input file visible
+        if (group==='A') document.getElementById('filesComprobantes').classList.remove('hidden');
+        if (group==='B') document.getElementById('filesItems').classList.remove('hidden');
+        return;
+      }
+      activeGroup = group;
+      camTitle.textContent = (group==='A' ? 'Cámara — Comprobantes' : 'Cámara — Items comprados');
+      overlay.classList.add('show');
+      lastShot = null; btnUse.classList.add('ghost');
+
+      try{
+        stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
+        video.srcObject = stream;
+        await video.play();
+      }catch(e){
+        console.error('getUserMedia error', e);
+        overlay.classList.remove('show');
+        // mostrar inputs como fallback
+        if (group==='A') document.getElementById('filesComprobantes').classList.remove('hidden');
+        if (group==='B') document.getElementById('filesItems').classList.remove('hidden');
+      }
+    }
+
+    function closeCamera(){
+      if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+      video.srcObject = null;
+      overlay.classList.remove('show');
+      lastShot = null;
+      activeGroup = null;
+    }
+
+    function takeShot(){
+      if (!video.videoWidth) return;
+      var w = video.videoWidth, h = video.videoHeight;
+      // Canvas del tamaño nativo (mejor calidad)
+      var c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      var ctx = c.getContext('2d');
+      ctx.drawImage(video, 0, 0, w, h);
+      return new Promise(function(res){
+        c.toBlob(function(blob){
+          if (!blob) return res(null);
+          // Nombre provisional, se renombra al guardar definitivo
+          var url = URL.createObjectURL(blob);
+          res({ blob, url });
+        }, 'image/jpeg', 0.92);
+      });
+    }
+
+    function addThumb(container, arr, blob, name){
+      var url = URL.createObjectURL(blob);
+      blob.name = name; // guardo el nombre final que usaremos en FormData
+      arr.push(blob);
+
+      var card = document.createElement('div');
+      card.className = 'thumb';
+      var img = document.createElement('img');
+      img.src = url;
+      var del = document.createElement('button');
+      del.className = 'danger'; del.type='button'; del.textContent='X';
+      del.onclick = function(){
+        URL.revokeObjectURL(url);
+        var idx = arr.indexOf(blob);
+        if (idx>=0) arr.splice(idx,1);
+        container.removeChild(card);
+      };
+      card.appendChild(img); card.appendChild(del);
+      container.appendChild(card);
+    }
+
+    btnShot.addEventListener('click', async function(){
+      var shot = await takeShot();
+      if (!shot) return;
+      lastShot = shot;
+      btnUse.classList.remove('ghost');
+    });
+
+    btnUse.addEventListener('click', function(){
+      if (!lastShot || !activeGroup) return;
+      // Prefijo por grupo
+      var prefix = (activeGroup==='A' ? 'comprobantes' : 'items');
+      var name = prefix + '-' + new Date().toISOString().replace(/[:.]/g,'') + '.jpg';
+
+      if (activeGroup==='A') addThumb(thumbsA, photosA, lastShot.blob, name);
+      else addThumb(thumbsB, photosB, lastShot.blob, name);
+
+      lastShot = null; btnUse.classList.add('ghost');
+    });
+
+    btnClose.addEventListener('click', closeCamera);
+
+    // Botones de UI
+    document.getElementById('btnCamA').addEventListener('click', ()=> openCamera('A'));
+    document.getElementById('btnCamB').addEventListener('click', ()=> openCamera('B'));
+    document.getElementById('btnFileA').addEventListener('click', ()=>{
+      document.getElementById('filesComprobantes').classList.remove('hidden');
+      document.getElementById('filesComprobantes').click();
+    });
+    document.getElementById('btnFileB').addEventListener('click', ()=>{
+      document.getElementById('filesItems').classList.remove('hidden');
+      document.getElementById('filesItems').click();
+    });
+
+    /* ======================== Envío ======================== */
     var form = document.getElementById('form');
     var statusEl = document.getElementById('status');
     var submitBtn = document.getElementById('submitBtn');
@@ -123,72 +285,80 @@
       statusEl.classList.toggle('error', !ok);
     }
 
-    <script>
-  // ... todo lo anterior igual ...
-
-  form.addEventListener('submit', function(e){
-    e.preventDefault();
-
-    // Validaciones mínimas
-    syncPagoFromDisplay();
-    var monto = parseFloat(pagoHidden.value || '0');
-    var comp  = document.getElementById('filesComprobantes');
-    var items = document.getElementById('filesItems');
-    if (!monto || isNaN(monto)) { setStatus('Ingresá un monto válido en ARS.', false); pagoDisplay.focus(); return; }
-    if (!comp.files || comp.files.length === 0) { setStatus('Adjuntá al menos 1 comprobante.', false); comp.focus(); return; }
-    if (!items.files || items.files.length === 0) { setStatus('Adjuntá al menos 1 foto de items comprados.', false); items.focus(); return; }
-
-    // ====== 👇 ARMA FORM-DATA CON ARCHIVOS RENOMBRADOS 👇 ======
-    var fd = new FormData();
-
-    // Campos de texto/hidden
-    fd.append('departamento', document.getElementById('departamento').value || '');
-    fd.append('reporta',      document.getElementById('reporta').value || '');
-    fd.append('reg',          document.getElementById('reg').value || '');
-    fd.append('pago_ars',     pagoHidden.value || '0');
-
-    // Helper: apendea archivos con un prefijo en el filename
-    function appendFilesWithPrefix(inputEl, fieldName, prefix){
-      var list = inputEl.files || [];
-      for (var i=0; i<list.length; i++){
+    function appendFilesWithPrefixFromList(fd, blobList, fieldName){
+      for (var i=0; i<blobList.length; i++){
+        var b = blobList[i];
+        var nm = b.name || (fieldName.replace('[]','') + '-shot-'+(i+1)+'.jpg');
+        fd.append(fieldName, b, nm);
+      }
+    }
+    function appendFilesFromInput(fd, inputEl, fieldName, prefix){
+      var list = (inputEl && inputEl.files) ? inputEl.files : [];
+      for (var i=0;i<list.length;i++){
         var f = list[i];
-        var newName = prefix + '-' + f.name.replace(/^\s+|\s+$/g,''); // ej: "comprobantes-xxxx.jpg"
-        // Usamos Blob para máxima compatibilidad (iOS incluidos)
-        var blob = new Blob([f], { type: f.type || 'application/octet-stream' });
-        fd.append(fieldName, blob, newName); // fieldName debe coincidir con tu backend (usa [] si querés arrays)
+        var newName = (prefix||'file') + '-' + (f.name || ('photo-'+(i+1)+'.jpg'));
+        var blob = new Blob([f], { type: f.type || 'image/jpeg' });
+        fd.append(fieldName, blob, newName);
       }
     }
 
-    // Enviamos como arrays (coinciden con tus names actuales)
-    appendFilesWithPrefix(comp,  'comprobantes[]', 'comprobantes');
-    appendFilesWithPrefix(items, 'items[]',        'items');
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      closeCamera(); // por si quedó abierto
 
-    // (opcional) Manifiesto espejo
-    var manifest = {
-      departamento: document.getElementById('departamento').value || '',
-      reporta:      document.getElementById('reporta').value || '',
-      reg:          document.getElementById('reg').value || '',
-      pago_ars:     pagoHidden.value || '0'
-    };
-    fd.append('manifest', new Blob([JSON.stringify(manifest)], {type:'application/json'}), 'manifest.json');
-    // ====== ☝️ FIN RENOMBRE ======
+      // Validaciones mínimas
+      syncPago();
+      var monto = parseFloat(pagoEl.value || '0');
+      if (!monto || isNaN(monto)) { setStatus('Ingresá un monto válido en ARS.', false); pagoDisplay.focus(); return; }
 
-    // Envío
-    submitBtn.disabled = true; submitBtn.textContent = 'Enviando…';
-    setStatus('Enviando datos…');
+      var haveA = (photosA.length>0) || (document.getElementById('filesComprobantes').files?.length>0);
+      var haveB = (photosB.length>0) || (document.getElementById('filesItems').files?.length>0);
+      if (!haveA){ setStatus('Adjuntá al menos 1 comprobante.', false); return; }
+      if (!haveB){ setStatus('Adjuntá al menos 1 foto de items comprados.', false); return; }
 
-    fetch(WEBHOOK_URL, { method:'POST', body: fd })
-      .then(function(res){ if (!res.ok) throw new Error('HTTP '+res.status); return res.text(); })
-      .then(function(){
-        setStatus('Enviado con éxito ✅', true);
-        var params = new URLSearchParams({ reg: manifest.reg, departamento: manifest.departamento, reporta: manifest.reporta });
-        try { localStorage.removeItem('wba_pending_reg'); } catch(_){}
-        window.location.href = 'gracias.html?'+params.toString();
-      })
-      .catch(function(err){
-        console.error(err);
-        setStatus('No se pudo enviar. Revisá conexión o reintentá en unos segundos.', false);
-        submitBtn.disabled = false; submitBtn.textContent = 'Enviar';
-      });
-  });
-</script>
+      // Armado de FormData con archivos renombrados (prefijos)
+      var fd = new FormData();
+      fd.append('departamento', depEl.value || '');
+      fd.append('reporta',      repEl.value || '');
+      fd.append('reg',          regEl.value || '');
+      fd.append('pago_ars',     pagoEl.value || '0');
+
+      appendFilesWithPrefixFromList(fd, photosA, 'comprobantes[]');
+      appendFilesWithPrefixFromList(fd, photosB, 'items[]');
+
+      // Fallbacks (por si el usuario usó input file)
+      appendFilesFromInput(fd, document.getElementById('filesComprobantes'), 'comprobantes[]', 'comprobantes');
+      appendFilesFromInput(fd, document.getElementById('filesItems'),        'items[]',        'items');
+
+      // Manifiesto (útil para debug)
+      var manifest = { departamento: depEl.value || '', reporta: repEl.value || '', reg: regEl.value || '', pago_ars: pagoEl.value || '0' };
+      fd.append('manifest', new Blob([JSON.stringify(manifest)], {type:'application/json'}), 'manifest.json');
+
+      // Envío robusto (no leemos el body para evitar cortes en Safari)
+      submitBtn.disabled = true; submitBtn.textContent = 'Enviando…';
+      setStatus('Enviando datos…');
+
+      var controller = new AbortController();
+      var timer = setTimeout(()=>controller.abort(), 25000); // aborta lectura a los 25s (el server igual ya recibió)
+
+      fetch(WEBHOOK_URL, { method:'POST', body: fd, redirect:'follow', signal: controller.signal })
+        .then(function(res){
+          clearTimeout(timer);
+          if (!res.ok) throw new Error('HTTP '+res.status);
+        })
+        .then(function(){
+          setStatus('Enviado con éxito ✅', true);
+          // Limpiar reg pendiente
+          try{ localStorage.removeItem('wba_pending_reg'); }catch(_){}
+          var params = new URLSearchParams({ reg: regEl.value, departamento: depEl.value, reporta: repEl.value });
+          location.href = 'gracias.html?' + params.toString();
+        })
+        .catch(function(err){
+          console.error(err);
+          setStatus('No se pudo enviar. Revisá conexión o reintentá en unos segundos.', false);
+          submitBtn.disabled = false; submitBtn.textContent = 'Enviar';
+        });
+    });
+  </script>
+</body>
+</html>
