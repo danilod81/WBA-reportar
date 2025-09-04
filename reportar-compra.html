@@ -123,50 +123,72 @@
       statusEl.classList.toggle('error', !ok);
     }
 
-    form.addEventListener('submit', function(e){
-      e.preventDefault();
+    <script>
+  // ... todo lo anterior igual ...
 
-      // Validaciones mínimas
-      syncPagoFromDisplay();
-      var monto = parseFloat(pagoHidden.value || '0');
-      var comp  = document.getElementById('filesComprobantes');
-      var items = document.getElementById('filesItems');
-      if (!monto || isNaN(monto)) { setStatus('Ingresá un monto válido en ARS.', false); pagoDisplay.focus(); return; }
-      if (!comp.files || comp.files.length === 0) { setStatus('Adjuntá al menos 1 comprobante.', false); comp.focus(); return; }
-      if (!items.files || items.files.length === 0) { setStatus('Adjuntá al menos 1 foto de items comprados.', false); items.focus(); return; }
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
 
-      // Armar FormData desde el form (incluye hidden y archivos)
-      var fd = new FormData(form);
+    // Validaciones mínimas
+    syncPagoFromDisplay();
+    var monto = parseFloat(pagoHidden.value || '0');
+    var comp  = document.getElementById('filesComprobantes');
+    var items = document.getElementById('filesItems');
+    if (!monto || isNaN(monto)) { setStatus('Ingresá un monto válido en ARS.', false); pagoDisplay.focus(); return; }
+    if (!comp.files || comp.files.length === 0) { setStatus('Adjuntá al menos 1 comprobante.', false); comp.focus(); return; }
+    if (!items.files || items.files.length === 0) { setStatus('Adjuntá al menos 1 foto de items comprados.', false); items.focus(); return; }
 
-      // Por claridad, agregamos un pequeño manifiesto JSON
-      var manifest = {
-        departamento: document.getElementById('departamento').value || '',
-        reporta:      document.getElementById('reporta').value || '',
-        reg:          document.getElementById('reg').value || '',
-        pago_ars:     pagoHidden.value || '0'
-      };
-      fd.append('manifest', new Blob([JSON.stringify(manifest)], {type:'application/json'}), 'manifest.json');
+    // ====== 👇 ARMA FORM-DATA CON ARCHIVOS RENOMBRADOS 👇 ======
+    var fd = new FormData();
 
-      // Envío
-      submitBtn.disabled = true; submitBtn.textContent = 'Enviando…';
-      setStatus('Enviando datos…');
+    // Campos de texto/hidden
+    fd.append('departamento', document.getElementById('departamento').value || '');
+    fd.append('reporta',      document.getElementById('reporta').value || '');
+    fd.append('reg',          document.getElementById('reg').value || '');
+    fd.append('pago_ars',     pagoHidden.value || '0');
 
-      fetch(WEBHOOK_URL, { method:'POST', body: fd })
-        .then(function(res){ if (!res.ok) throw new Error('HTTP '+res.status); return res.text(); })
-        .then(function(){
-          setStatus('Enviado con éxito ✅', true);
-          // Redirigir a gracias.html con reg + espejo de QS útiles
-          var params = new URLSearchParams({ reg: manifest.reg, departamento: manifest.departamento, reporta: manifest.reporta });
-          // Limpiamos el pending_reg para permitir un nuevo UUID en próximo reporte
-          try { localStorage.removeItem('wba_pending_reg'); } catch(_){}
-          window.location.href = 'gracias.html?'+params.toString();
-        })
-        .catch(function(err){
-          console.error(err);
-          setStatus('No se pudo enviar. Revisá conexión o reintentá en unos segundos.', false);
-          submitBtn.disabled = false; submitBtn.textContent = 'Enviar';
-        });
-    });
-  </script>
-</body>
-</html>
+    // Helper: apendea archivos con un prefijo en el filename
+    function appendFilesWithPrefix(inputEl, fieldName, prefix){
+      var list = inputEl.files || [];
+      for (var i=0; i<list.length; i++){
+        var f = list[i];
+        var newName = prefix + '-' + f.name.replace(/^\s+|\s+$/g,''); // ej: "comprobantes-xxxx.jpg"
+        // Usamos Blob para máxima compatibilidad (iOS incluidos)
+        var blob = new Blob([f], { type: f.type || 'application/octet-stream' });
+        fd.append(fieldName, blob, newName); // fieldName debe coincidir con tu backend (usa [] si querés arrays)
+      }
+    }
+
+    // Enviamos como arrays (coinciden con tus names actuales)
+    appendFilesWithPrefix(comp,  'comprobantes[]', 'comprobantes');
+    appendFilesWithPrefix(items, 'items[]',        'items');
+
+    // (opcional) Manifiesto espejo
+    var manifest = {
+      departamento: document.getElementById('departamento').value || '',
+      reporta:      document.getElementById('reporta').value || '',
+      reg:          document.getElementById('reg').value || '',
+      pago_ars:     pagoHidden.value || '0'
+    };
+    fd.append('manifest', new Blob([JSON.stringify(manifest)], {type:'application/json'}), 'manifest.json');
+    // ====== ☝️ FIN RENOMBRE ======
+
+    // Envío
+    submitBtn.disabled = true; submitBtn.textContent = 'Enviando…';
+    setStatus('Enviando datos…');
+
+    fetch(WEBHOOK_URL, { method:'POST', body: fd })
+      .then(function(res){ if (!res.ok) throw new Error('HTTP '+res.status); return res.text(); })
+      .then(function(){
+        setStatus('Enviado con éxito ✅', true);
+        var params = new URLSearchParams({ reg: manifest.reg, departamento: manifest.departamento, reporta: manifest.reporta });
+        try { localStorage.removeItem('wba_pending_reg'); } catch(_){}
+        window.location.href = 'gracias.html?'+params.toString();
+      })
+      .catch(function(err){
+        console.error(err);
+        setStatus('No se pudo enviar. Revisá conexión o reintentá en unos segundos.', false);
+        submitBtn.disabled = false; submitBtn.textContent = 'Enviar';
+      });
+  });
+</script>
