@@ -7,7 +7,7 @@
   <style>
     :root{ --bg:#f6f7fb; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#2563eb; --border:#e5e7eb; }
     *{ box-sizing:border-box }
-    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:#111827; line-height:1.5; }
     .container{ max-width:680px; margin:0 auto; padding:20px 16px 40px }
     h1{ text-align:center; font-size:clamp(1.25rem,4.8vw,1.8rem); font-weight:800; margin:6px 0 2px }
     .sub{ text-align:center; margin:2px 0 16px; color:var(--muted); font-size:.98rem; min-height:1.4em }
@@ -31,8 +31,6 @@
     .file-fallback{ color:var(--muted); font-size:.9rem }
     input[type=file]{ display:block; width:100% }
     .busy{ opacity:.7; pointer-events:none }
-
-    /* Aviso de red */
     .net{ position:sticky; top:0; padding:8px 12px; border-radius:10px; background:#fee2e2; color:#991b1b; text-align:center; margin:6px auto 12px }
     .net.ok{ background:#dcfce7; color:#065f46 }
   </style>
@@ -48,6 +46,7 @@
       <form id="form" novalidate>
         <input type="hidden" id="departamento" name="departamento" />
         <input type="hidden" id="reporta" name="reporta" />
+        <input type="hidden" id="reg" name="reg" /> <!-- NUEVO -->
 
         <label for="descripcion">Detalle del problema *</label>
         <textarea id="descripcion" name="descripcion" placeholder="Contanos qué pasó, dónde y desde cuándo…" required></textarea>
@@ -82,6 +81,7 @@
     const qs = new URLSearchParams(location.search);
     const depQS = (qs.get('departamento') || '').trim();
     const repQS = (qs.get('reporta') || '').trim();
+    const regQS = (qs.get('reg') || '').trim();            // ← NUEVO
     const WEBHOOK_URL = 'https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento';
 
     const netEl = document.getElementById('net');
@@ -93,8 +93,8 @@
       document.getElementById('direccionDepto').textContent = depQS;
     }
     if (repQS) document.getElementById('reporta').value = repQS;
+    if (regQS) document.getElementById('reg').value = regQS; // ← NUEVO
 
-    function enc(v){ return encodeURIComponent((v ?? '').toString()); }
     function ok(msg){ statusEl.innerHTML = `<span class="ok">${msg}</span>`; }
     function err(msg){ statusEl.innerHTML = `<span class="error">${msg}</span>`; }
 
@@ -181,7 +181,7 @@
       if (dbPromise) return dbPromise;
       dbPromise = new Promise((resolve, reject) => {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
-        req.onupgradeneeded = (e) => {
+        req.onupgradeneeded = () => {
           const db = req.result;
           if (!db.objectStoreNames.contains('draft')) db.createObjectStore('draft', { keyPath: 'id' });
           if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
@@ -197,46 +197,25 @@
     async function dbGetAll(store){ const db = await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction(store,'readonly'); const req=tx.objectStore(store).getAll(); req.onsuccess=()=>res(req.result||[]); req.onerror=()=>rej(req.error); }); }
     async function dbDelete(store, key){ const db = await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction(store,'readwrite'); tx.objectStore(store).delete(key); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
 
-    // Guarda un borrador (sobrescribe siempre id='current')
-    async function saveDraft(payload){
-      await dbPut('draft', { id:'current', ts:Date.now(), ...payload });
-    }
-    // Carga borrador y lo pinta en UI
+    async function saveDraft(payload){ await dbPut('draft', { id:'current', ts:Date.now(), ...payload }); }
     async function restoreDraftIfEmpty(){
       const d = await dbGet('draft','current');
       if (!d) return;
       const descEl = document.getElementById('descripcion');
       if (!descEl.value) descEl.value = d.descripcion || '';
-      if (shots.length === 0 && Array.isArray(d.files)) {
-        d.files.forEach(f => addThumb(f.blob));
-      }
     }
-    // Encola un reporte para reintentar
-    async function enqueue(payload){
-      await dbPut('queue', payload);
-    }
-
-    // Toma la cola y la intenta enviar (se frena si falla red)
+    async function enqueue(payload){ await dbPut('queue', payload); }
     async function flushQueue(){
       if (!navigator.onLine) return;
       const items = await dbGetAll('queue');
       if (!items.length) return;
       let okCount = 0;
-
       for (const item of items){
         try{
           const sent = await sendPayload(item);
-          if (sent.ok){
-            await dbDelete('queue', item.id);
-            okCount++;
-          } else {
-            // error de aplicación: dejamos en cola y paramos
-            break;
-          }
-        }catch{
-          // error de red/timeout: dejamos en cola y paramos
-          break;
-        }
+          if (sent.ok){ await dbDelete('queue', item.id); okCount++; }
+          else break;
+        }catch{ break; }
       }
       if (okCount > 0) ok(`Se enviaron ${okCount} reporte(s) pendientes.`);
     }
@@ -250,7 +229,7 @@
         netEl.classList.remove('hidden');
         netEl.classList.add('ok');
         setTimeout(()=>netEl.classList.add('hidden'), 1200);
-        flushQueue(); // intenta enviar pendientes
+        flushQueue();
       } else {
         netEl.textContent = 'Sin conexión — podés guardar y lo enviamos cuando vuelva internet';
         netEl.classList.remove('ok','hidden');
@@ -264,7 +243,6 @@
     // ARMAR PAYLOAD + ENVÍO
     // ========================
     function gatherFiles(){
-      // devuelve array [{name, type, blob}]
       const out = [];
       if (!fallbackInput.classList.contains('hidden')){
         const files = Array.from(fallbackInput.files || []);
@@ -283,20 +261,20 @@
       return {
         departamento: depQS,
         reporta: repQS,
+        reg: regQS,                 // ← NUEVO
         descripcion: desc,
-        files: gatherFiles(), // blobs
+        files: gatherFiles(),
       };
     }
 
     async function sendPayload(payload){
-      // arma FormData y hace fetch; retorna {ok, redirect?}
       const fd = new FormData();
       fd.append('departamento', payload.departamento);
       fd.append('reporta', payload.reporta);
+      fd.append('reg', payload.reg || '');         // ← NUEVO
       fd.append('descripcion', payload.descripcion);
       for (const f of payload.files) fd.append('media[]', f.blob, f.name);
 
-      // timeout contra conexiones colgadas
       const controller = new AbortController();
       const to = setTimeout(()=>controller.abort(), 15000);
 
@@ -309,11 +287,9 @@
         return { ok: !!data?.ok, redirect: data?.redirect || null };
       }catch(e){
         clearTimeout(to);
-        // si es error de red/timeout => reintentar luego
         if (!navigator.onLine || e.name === 'AbortError' || /Failed to fetch|NetworkError/i.test(String(e.message))) {
-          throw e; // tratamos como no envío por red
+          throw e;
         }
-        // errores 4xx/5xx lógicos
         return { ok:false };
       }
     }
@@ -331,14 +307,11 @@
       if (!desc)   return err('Completá la descripción.');
 
       const payload = buildPayload();
-
-      // validación de al menos una imagen
       if (!payload.files.length) return err('Adjuntá al menos una foto.');
 
       submitBtn.classList.add('busy');
       statusEl.textContent = 'Enviando…';
 
-      // Si no hay internet: guardamos y encolamos
       if (!navigator.onLine){
         await saveDraft(payload);
         await enqueue(payload);
@@ -347,32 +320,24 @@
         return;
       }
 
-      // Intento online
       try{
         const sent = await sendPayload(payload);
         if (sent.ok && sent.redirect) {
-          // limpieza de borrador si coincide
-          await dbPut('draft',{ id:'current', ts:Date.now() }); // vacío
+          await dbPut('draft',{ id:'current', ts:Date.now() });
           window.location.href = sent.redirect;
           return;
         }
-        // si no hubo redirect/ok, encolamos para reintentar
-        await saveDraft(payload);
-        await enqueue(payload);
+        await saveDraft(payload); await enqueue(payload);
         err('No pudimos confirmar el envío. Lo guardamos y reintentaremos automáticamente.');
       }catch(e){
-        // error de red: guardamos y encolamos
-        await saveDraft(payload);
-        await enqueue(payload);
+        await saveDraft(payload); await enqueue(payload);
         err('No hay conexión o la red está inestable. Guardamos el reporte y lo enviaremos automáticamente.');
       }finally{
         submitBtn.classList.remove('busy');
       }
     });
 
-    // ========================
-    // AL INICIAR: restaurar borrador y flush cola
-    // ========================
+    // Al iniciar
     restoreDraftIfEmpty();
     flushQueue();
   </script>
