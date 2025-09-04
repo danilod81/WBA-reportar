@@ -47,6 +47,7 @@
         <!-- Hidden (QS) -->
         <input type="hidden" id="departamento" name="departamento" />
         <input type="hidden" id="reporta" name="reporta" />
+        <input type="hidden" id="reg" name="reg" /> <!-- NUEVO -->
 
         <!-- PAGO ARS -->
         <label for="pagoDisplay">Pago ARS *</label>
@@ -77,6 +78,7 @@
     const qs = new URLSearchParams(location.search);
     const depQS = (qs.get('departamento') || '').trim();
     const repQS = (qs.get('reporta') || '').trim();
+    const regQS = (qs.get('reg') || '').trim(); // NUEVO
     const WEBHOOK_URL = 'https://optimaltm.app.n8n.cloud/webhook/wba-reporte-compra';
 
     const netEl = document.getElementById('net');
@@ -88,6 +90,7 @@
       document.getElementById('direccionDepto').textContent = depQS;
     }
     if (repQS) document.getElementById('reporta').value = repQS;
+    if (regQS) document.getElementById('reg').value = regQS; // NUEVO
 
     function ok(msg){ statusEl.innerHTML = `<span class="ok">${msg}</span>`; }
     function err(msg){ statusEl.innerHTML = `<span class="error">${msg}</span>`; }
@@ -111,10 +114,8 @@
     function syncPagoFromDisplay(){
       const n = toNum(pagoDisplay.value);
       pagoHidden.value = String(n);
-      // rehacer formato amigable sin cambiar la posición del cursor en exceso
       const start = pagoDisplay.selectionStart;
       pagoDisplay.value = formatARS(n);
-      // mejor esfuerzo
       try{ pagoDisplay.setSelectionRange(start, start); }catch{}
     }
     pagoDisplay.addEventListener('input', syncPagoFromDisplay);
@@ -221,7 +222,7 @@
 
     async function saveDraft(payload){ await dbPut('draft', { id:'current', ts:Date.now(), ...payload }); }
     async function restoreDraftIfEmpty(){ const d = await dbGet('draft','current'); if (!d) return; if (pagoDisplay.value==="") { pagoDisplay.value = formatARS(toNum(d.pago_ars||0)); pagoHidden.value = String(toNum(d.pago_ars||0)); }
-      // No restauramos imágenes por simplicidad (URLs temporales). Si hace falta, puedo extenderlo.
+      // No restauramos imágenes por simplicidad.
     }
     async function enqueue(payload){ await dbPut('queue', payload); }
     async function flushQueue(){ if (!navigator.onLine) return; const items = await dbGetAll('queue'); if (!items.length) return; let okCount=0; for (const item of items){ try{ const sent = await sendPayload(item); if (sent.ok){ await dbDelete('queue', item.id); okCount++; } else { break; } }catch{ break; } } if (okCount>0) ok(`Se enviaron ${okCount} reporte(s) pendientes.`); }
@@ -240,6 +241,7 @@
       return {
         departamento: depQS,
         reporta: repQS,
+        reg: regQS, // NUEVO
         pago_ars: document.getElementById('pago_ars').value || '0',
         comprobantes: camComprobantes.gatherFiles(),
         items: camItems.gatherFiles(),
@@ -250,6 +252,7 @@
       const fd = new FormData();
       fd.append('departamento', payload.departamento);
       fd.append('reporta', payload.reporta);
+      fd.append('reg', payload.reg || ''); // NUEVO
       fd.append('pago_ars', payload.pago_ars);
       for (const f of payload.comprobantes) fd.append('comprobantes[]', f.blob, f.name);
       for (const f of payload.items)         fd.append('items[]',         f.blob, f.name);
@@ -286,13 +289,29 @@
 
       submitBtn.classList.add('busy'); statusEl.textContent = 'Enviando…';
 
-      if (!navigator.onLine){ await saveDraft(payload); await enqueue(payload); ok('Sin conexión: guardamos el registro para enviarlo automáticamente cuando vuelva internet.'); submitBtn.classList.remove('busy'); return; }
+      if (!navigator.onLine){
+        await saveDraft(payload);
+        await enqueue(payload);
+        ok('Sin conexión: guardamos el registro para enviarlo automáticamente cuando vuelva internet.');
+        submitBtn.classList.remove('busy');
+        return;
+      }
 
-      try{ const sent = await sendPayload(payload);
-        if (sent.ok && sent.redirect){ await dbPut('draft',{ id:'current', ts:Date.now() }); window.location.href = sent.redirect; return; }
-        await saveDraft(payload); await enqueue(payload); err('No pudimos confirmar el envío. Lo guardamos y reintentaremos automáticamente.');
-      }catch(e){ await saveDraft(payload); await enqueue(payload); err('No hay conexión o la red está inestable. Guardamos el registro y lo enviaremos automáticamente.'); }
-      finally{ submitBtn.classList.remove('busy'); }
+      try{
+        const sent = await sendPayload(payload);
+        if (sent.ok && sent.redirect){
+          await dbPut('draft',{ id:'current', ts:Date.now() });
+          window.location.href = sent.redirect;
+          return;
+        }
+        await saveDraft(payload); await enqueue(payload);
+        err('No pudimos confirmar el envío. Lo guardamos y reintentaremos automáticamente.');
+      }catch(e){
+        await saveDraft(payload); await enqueue(payload);
+        err('No hay conexión o la red está inestable. Guardamos el registro y lo enviaremos automáticamente.');
+      } finally {
+        submitBtn.classList.remove('busy');
+      }
     });
 
     // Al iniciar
