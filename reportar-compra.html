@@ -21,8 +21,6 @@
     .muted-btn{ background:#e5e7eb; color:#111827 }
     .status{ margin-top:10px; color:var(--muted); text-align:center; font-size:.95rem; min-height:1.5em }
     .error{ color:var(--danger) } .ok{ color:var(--ok) } .hidden{ display:none }
-    .net{ position:sticky; top:0; padding:8px 12px; border-radius:10px; background:#fee2e2; color:#991b1b; text-align:center; margin:6px auto 12px }
-    .net.ok{ background:#dcfce7; color:#065f46 }
     .hint{ color:var(--muted); font-size:.9rem; margin-top:4px }
     .mini{ font-size:.85rem; color:#6b7280 }
     .thumbs{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px }
@@ -34,18 +32,24 @@
     .overlay{ position:fixed; inset:0; background:#000; display:none; z-index:1000; }
     .overlay.show{ display:flex; align-items:center; justify-content:center; }
     .cam-wrap{ position:relative; width:100%; height:100%; display:flex; flex-direction:column; }
+    .cam-title{ position:absolute; top:0; left:0; right:0; text-align:center; color:#fff; padding:12px; background:linear-gradient(180deg, rgba(0,0,0,.6), transparent); font-weight:700; z-index:3 }
     .cam-video{ flex:1; position:relative; }
     video{ width:100%; height:100%; object-fit:cover; background:#000; }
-    .cam-title{ position:absolute; top:0; left:0; right:0; text-align:center; color:#fff; padding:12px; background:linear-gradient(180deg, rgba(0,0,0,.6), transparent); font-weight:700 }
-    .cam-ui{ position:absolute; left:0; right:0; bottom:0; display:flex; gap:10px; padding:12px; background:linear-gradient(180deg, transparent, rgba(0,0,0,.6)); justify-content:center; }
+    .cam-ui{ position:absolute; left:0; right:0; bottom:0; display:flex; gap:10px; padding:12px; background:linear-gradient(180deg, transparent, rgba(0,0,0,.6)); justify-content:center; z-index:3 }
     .cam-ui button{ min-width:120px; border-radius:999px; padding:14px 18px; font-size:1.05rem; }
+
+    /* Thumbnails superpuestos en overlay */
+    .overlay-thumbs{ position:absolute; right:12px; top:12px; display:flex; flex-direction:column; gap:8px; max-height:50vh; overflow:auto; z-index:3 }
+    .overlay-thumbs .o-thumb{ position:relative; width:72px; height:72px; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,.35); box-shadow:0 2px 8px rgba(0,0,0,.35) }
+    .overlay-thumbs .o-thumb img{ width:100%; height:100%; object-fit:cover }
+    .overlay-thumbs .o-thumb .del{ position:absolute; top:2px; right:2px; background:rgba(185,28,28,.95); color:#fff; border:0; border-radius:8px; padding:2px 6px; font-size:.7rem; cursor:pointer }
+    .overlay-badge{ position:absolute; right:12px; bottom:96px; background:rgba(17,24,39,.75); color:#fff; padding:6px 10px; border-radius:999px; font-weight:700; z-index:3 }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>🧾 Registro de Compra</h1>
     <div id="direccionDepto" class="sub">Dirección del departamento</div>
-    <div id="net" class="net hidden">Sin conexión</div>
 
     <div class="card">
       <form id="form" method="post" enctype="multipart/form-data" novalidate>
@@ -61,7 +65,7 @@
         <div class="hint">Se muestra con separadores (12.345,67) pero se envía como número.</div>
 
         <!-- COMPROBANTES -->
-        <label>Comprobantes (fotos) *</label>
+        <label>Comprobantes (fotos) *</nlabel>
         <div class="row">
           <button type="button" id="btnCamA">Sacar foto</button>
           <button type="button" id="btnFileA" class="muted-btn hidden">Subir archivo</button>
@@ -83,7 +87,7 @@
         </div>
         <div id="status" class="status" role="status" aria-live="polite"></div>
       </form>
-      <div class="mini">Sacá varias fotos. Si la cámara no está disponible o se negó permiso, aparecerá la opción de subir archivo.</div>
+      <div class="mini">Si la cámara no está disponible o se negó permiso, aparecerá "Subir archivo".</div>
     </div>
   </div>
 
@@ -93,6 +97,8 @@
       <div class="cam-title" id="camTitle">Cámara</div>
       <div class="cam-video">
         <video id="video" playsinline autoplay></video>
+        <div id="overlayThumbs" class="overlay-thumbs"></div>
+        <div id="overlayBadge" class="overlay-badge hidden">0 fotos</div>
       </div>
       <div class="cam-ui">
         <button type="button" id="btnShot" class="secondary">Sacar foto</button>
@@ -110,12 +116,7 @@
     function setLS(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
     function toNum(v){ if (v==null) return 0; var s=String(v).replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.').replace(/[^0-9.\-]/g,''); var n=parseFloat(s); return isFinite(n)?n:0; }
     function formatARS(n){ try { return new Intl.NumberFormat('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);} catch(e){ return (n||0).toFixed(2);} }
-    function uuid(){
-      try{
-        if (crypto && crypto.randomUUID) return crypto.randomUUID();
-        if (crypto && crypto.getRandomValues){ var a=new Uint8Array(16); crypto.getRandomValues(a); a[6]=(a[6]&0x0f)|0x40; a[8]=(a[8]&0x3f)|0x80; return Array.from(a).map((v,i)=> (i===4||i===6||i===8||i===10?'-':'')+('0'+v.toString(16)).slice(-2)).join(''); }
-      }catch(_){} return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});
-    }
+    function uuid(){ try{ if (crypto && crypto.randomUUID) return crypto.randomUUID(); if (crypto && crypto.getRandomValues){ var a=new Uint8Array(16); crypto.getRandomValues(a); a[6]=(a[6]&0x0f)|0x40; a[8]=(a[8]&0x3f)|0x80; return Array.from(a).map((v,i)=>(i===4||i===6||i===8||i===10?'-':'')+('0'+v.toString(16)).slice(-2)).join(''); } }catch(_){} return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
 
     /* ======================== QS e idempotencia ======================== */
     var qs = new URLSearchParams(location.search || '');
@@ -138,24 +139,16 @@
     pagoDisplay.addEventListener('input', syncPago);
     pagoDisplay.addEventListener('blur',  syncPago);
 
-    /* ======================== Estado de red ======================== */
-    var netEl = document.getElementById('net');
-    function updNet(){ var on = navigator.onLine; netEl.classList.toggle('hidden', on); netEl.textContent = on ? '' : 'Sin conexión'; }
-    addEventListener('online',  updNet); addEventListener('offline', updNet); updNet();
-
     /* ======================== Cámara ======================== */
+    function canUseCamera(){ return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
+
     var overlay = document.getElementById('overlay');
+    var overlayThumbs = document.getElementById('overlayThumbs');
+    var overlayBadge  = document.getElementById('overlayBadge');
     var video = document.getElementById('video');
     var camTitle = document.getElementById('camTitle');
     var btnShot = document.getElementById('btnShot');
     var btnOK = document.getElementById('btnOK');
-    var stream = null;
-    var activeGroup = null; // 'A' o 'B'
-
-    var photosA = []; // comprobantes
-    var photosB = []; // items
-    var thumbsA = document.getElementById('thumbsA');
-    var thumbsB = document.getElementById('thumbsB');
 
     var btnCamA = document.getElementById('btnCamA');
     var btnCamB = document.getElementById('btnCamB');
@@ -164,19 +157,23 @@
     var inputA = document.getElementById('filesComprobantes');
     var inputB = document.getElementById('filesItems');
 
-    function canUseCamera(){
-      return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-    }
+    var stream = null;
+    var activeGroup = null; // 'A' o 'B'
 
-    // Mostrar opción "Subir archivo" SOLO si no hay cámara
+    var photosA = []; // comprobantes
+    var photosB = []; // items
+    var thumbsA = document.getElementById('thumbsA');
+    var thumbsB = document.getElementById('thumbsB');
+
+    // Mostrar opción "Subir archivo" SOLO si no hay API de cámara
     if (!canUseCamera()){
       btnFileA.classList.remove('hidden'); inputA.classList.remove('hidden');
       btnFileB.classList.remove('hidden'); inputB.classList.remove('hidden');
     }
 
     async function openCamera(group){
-      if (!canUseCamera()) {
-        // Sin API de cámara -> mostrar fallback
+      if (!canUseCamera()){
+        // Fallback inmediato
         if (group==='A'){ btnFileA.classList.remove('hidden'); inputA.classList.remove('hidden'); inputA.click(); }
         else            { btnFileB.classList.remove('hidden'); inputB.classList.remove('hidden'); inputB.click(); }
         return;
@@ -184,18 +181,17 @@
       activeGroup = group;
       camTitle.textContent = (group==='A' ? 'Cámara — Comprobantes' : 'Cámara — Items comprados');
       overlay.classList.add('show');
-
+      redrawOverlayFromArrays();
       try{
         stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
-        video.srcObject = stream;
-        await video.play();
+        video.srcObject = stream; await video.play();
       }catch(e){
         console.error('getUserMedia error', e);
         overlay.classList.remove('show');
-        // Permiso denegado o error -> mostrar fallback SOLO ahora
+        activeGroup = null;
+        // Permiso denegado/error → habilitar fallback
         if (group==='A'){ btnFileA.classList.remove('hidden'); inputA.classList.remove('hidden'); inputA.click(); }
         else            { btnFileB.classList.remove('hidden'); inputB.classList.remove('hidden'); inputB.click(); }
-        activeGroup = null;
       }
     }
 
@@ -206,151 +202,124 @@
       activeGroup = null;
     }
 
+    function countForActive(){ return (activeGroup==='A' ? photosA.length : photosB.length); }
+    function redrawOverlayBadge(){
+      var c = countForActive();
+      overlayBadge.textContent = (c||0) + ' foto' + (c===1?'':'s');
+      overlayBadge.classList.toggle('hidden', c<=0);
+    }
+    function redrawOverlayFromArrays(){
+      overlayThumbs.innerHTML='';
+      var arr = (activeGroup==='A'? photosA : photosB);
+      for (var i=arr.length-1; i>=0; i--){
+        (function(b){
+          var url = URL.createObjectURL(b);
+          var card = document.createElement('div'); card.className='o-thumb';
+          var img = document.createElement('img'); img.src=url; card.appendChild(img);
+          var del = document.createElement('button'); del.className='del'; del.textContent='X';
+          del.onclick = function(){ URL.revokeObjectURL(url); var idx=arr.indexOf(b); if(idx>=0) arr.splice(idx,1); card.remove(); redrawOverlayBadge(); };
+          card.appendChild(del);
+          overlayThumbs.appendChild(card);
+        })(arr[i]);
+      }
+      redrawOverlayBadge();
+    }
+
     function takeShot(){
       if (!video.videoWidth) return null;
-      var w = video.videoWidth, h = video.videoHeight;
-      var c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      var ctx = c.getContext('2d');
-      ctx.drawImage(video, 0, 0, w, h);
-      return new Promise(function(res){
-        c.toBlob(function(blob){
-          if (!blob) return res(null);
-          res(blob);
-        }, 'image/jpeg', 0.92);
-      });
+      var w=video.videoWidth, h=video.videoHeight;
+      var c=document.createElement('canvas'); c.width=w; c.height=h;
+      var ctx=c.getContext('2d'); ctx.drawImage(video,0,0,w,h);
+      return new Promise(function(res){ c.toBlob(function(blob){ res(blob||null); }, 'image/jpeg', 0.92); });
     }
 
-    // Thumbnails con borrar
-    function addThumb(container, arr, blob, name){
-      var url = URL.createObjectURL(blob);
-      blob.name = name;    // filename a usar en FormData
-      arr.push(blob);
-
-      var card = document.createElement('div');
-      card.className = 'thumb';
-
-      var img = document.createElement('img');
-      img.src = url;
-
-      var del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'del';
-      del.textContent = 'X';
-      del.onclick = function(){
-        URL.revokeObjectURL(url);
-        var idx = arr.indexOf(blob);
-        if (idx >= 0) arr.splice(idx, 1);
-        card.remove();
-      };
-
-      card.appendChild(img);
-      card.appendChild(del);
-      container.appendChild(card);
+    function addFormThumb(container, arr, blob, name){
+      var url = URL.createObjectURL(blob); blob.name = name; arr.push(blob);
+      var card = document.createElement('div'); card.className = 'thumb';
+      var img = document.createElement('img'); img.src = url; card.appendChild(img);
+      var del = document.createElement('button'); del.className='del'; del.type='button'; del.textContent='X';
+      del.onclick = function(){ URL.revokeObjectURL(url); var idx=arr.indexOf(blob); if(idx>=0) arr.splice(idx,1); card.remove(); if (activeGroup) redrawOverlayFromArrays(); };
+      card.appendChild(del); container.appendChild(card);
     }
 
-    // Importa archivos del input al array + thumbnails (y limpia el input)
-    function importInputFilesToArray(inputEl, container, arr, prefix){
-      var list = (inputEl && inputEl.files) ? inputEl.files : [];
-      for (var i = 0; i < list.length; i++){
-        var f = list[i];
-        var name = prefix + '-' + (f.name || ('photo-'+(i+1)+'.jpg'));
-        var blob = new Blob([f], { type: f.type || 'image/jpeg' });
-        addThumb(container, arr, blob, name);
-      }
-      try { inputEl.value = ''; } catch(_) {}
+    function addOverlayThumb(arr, blob, name){
+      var url = URL.createObjectURL(blob); blob.name = name; arr.push(blob);
+      var card = document.createElement('div'); card.className='o-thumb';
+      var img = document.createElement('img'); img.src=url; card.appendChild(img);
+      var del = document.createElement('button'); del.className='del'; del.textContent='X';
+      del.onclick = function(){ URL.revokeObjectURL(url); var idx=arr.indexOf(blob); if(idx>=0) arr.splice(idx,1); card.remove(); redrawOverlayBadge(); };
+      card.appendChild(del); overlayThumbs.prepend(card); redrawOverlayBadge();
     }
 
-    // Botones del formulario
-    btnCamA.addEventListener('click', ()=> openCamera('A'));
-    btnCamB.addEventListener('click', ()=> openCamera('B'));
+    // Eventos UI
+    document.getElementById('btnCamA').addEventListener('click', ()=> openCamera('A'));
+    document.getElementById('btnCamB').addEventListener('click', ()=> openCamera('B'));
 
-    btnFileA.addEventListener('click', ()=>{ inputA.classList.remove('hidden'); inputA.click(); });
-    btnFileB.addEventListener('click', ()=>{ inputB.classList.remove('hidden'); inputB.click(); });
+    document.getElementById('btnFileA').addEventListener('click', ()=>{ inputA.classList.remove('hidden'); inputA.click(); });
+    document.getElementById('btnFileB').addEventListener('click', ()=>{ inputB.classList.remove('hidden'); inputB.click(); });
 
     inputA.addEventListener('change', function(){ importInputFilesToArray(inputA, thumbsA, photosA, 'comprobantes'); });
     inputB.addEventListener('change', function(){ importInputFilesToArray(inputB, thumbsB, photosB, 'items'); });
 
-    // Cámara: sacar foto agrega thumbnail inmediatamente
     btnShot.addEventListener('click', async function(){
-      var blob = await takeShot();
-      if (!blob || !activeGroup) return;
+      var blob = await takeShot(); if (!blob || !activeGroup) return;
       var prefix = (activeGroup==='A' ? 'comprobantes' : 'items');
       var name = prefix + '-' + new Date().toISOString().replace(/[:.]/g,'') + '.jpg';
-      if (activeGroup==='A') addThumb(thumbsA, photosA, blob, name);
-      else                   addThumb(thumbsB, photosB, blob, name);
+      // 1) Superponer en overlay
+      addOverlayThumb(activeGroup==='A'?photosA:photosB, blob, name);
+      // 2) Reflejar en thumbnails del formulario
+      if (activeGroup==='A') addFormThumb(thumbsA, photosA, blob, name);
+      else                   addFormThumb(thumbsB, photosB, blob, name);
     });
 
-    // OK: cerrar overlay
     btnOK.addEventListener('click', closeCamera);
+
+    function importInputFilesToArray(inputEl, container, arr, prefix){
+      var list = (inputEl && inputEl.files) ? inputEl.files : [];
+      for (var i=0; i<list.length; i++){
+        var f=list[i]; var name = prefix + '-' + (f.name || ('photo-'+(i+1)+'.jpg'));
+        var blob = new Blob([f], { type: f.type || 'image/jpeg' });
+        addFormThumb(container, arr, blob, name);
+      }
+      try{ inputEl.value=''; }catch(_){ }
+    }
 
     /* ======================== Envío ======================== */
     var form = document.getElementById('form');
     var statusEl = document.getElementById('status');
     var submitBtn = document.getElementById('submitBtn');
 
-    function setStatus(msg, ok){
-      statusEl.textContent = msg || '';
-      statusEl.classList.toggle('ok', !!ok);
-      statusEl.classList.toggle('error', !ok);
-    }
-
-    function appendBlobs(fd, blobList, fieldName){
-      for (var i=0; i<blobList.length; i++){
-        var b = blobList[i];
-        var nm = b.name || (fieldName.replace('[]','') + '-shot-'+(i+1)+'.jpg');
-        fd.append(fieldName, b, nm);
-      }
-    }
+    function setStatus(msg, ok){ statusEl.textContent = msg || ''; statusEl.classList.toggle('ok', !!ok); statusEl.classList.toggle('error', !ok); }
 
     form.addEventListener('submit', function(e){
-      e.preventDefault();
-      closeCamera(); // por si quedó abierto
-
+      e.preventDefault(); closeCamera();
       // Validaciones
-      syncPago();
-      var monto = parseFloat(pagoEl.value || '0');
-      if (!monto || isNaN(monto)) { setStatus('Ingresá un monto válido en ARS.', false); pagoDisplay.focus(); return; }
+      var monto = toNum(document.getElementById('pagoDisplay').value); document.getElementById('pago_ars').value = String(monto);
+      if (!monto || !isFinite(monto)) { setStatus('Ingresá un monto válido en ARS.', false); return; }
+      if (photosA.length===0){ setStatus('Adjuntá al menos 1 comprobante.', false); return; }
+      if (photosB.length===0){ setStatus('Adjuntá al menos 1 foto de items comprados.', false); return; }
 
-      var haveA = photosA.length > 0;
-      var haveB = photosB.length > 0;
-      if (!haveA){ setStatus('Adjuntá al menos 1 comprobante.', false); return; }
-      if (!haveB){ setStatus('Adjuntá al menos 1 foto de items comprados.', false); return; }
-
-      // FormData (solo arrays: cámara + archivos importados)
+      // Armado FormData (solo arrays)
       var fd = new FormData();
-      fd.append('departamento', depEl.value || '');
-      fd.append('reporta',      repEl.value || '');
-      fd.append('reg',          regEl.value || '');
-      fd.append('pago_ars',     pagoEl.value || '0');
+      fd.append('departamento', document.getElementById('departamento').value || '');
+      fd.append('reporta',      document.getElementById('reporta').value || '');
+      fd.append('reg',          document.getElementById('reg').value || '');
+      fd.append('pago_ars',     document.getElementById('pago_ars').value || '0');
 
-      appendBlobs(fd, photosA, 'comprobantes[]');
-      appendBlobs(fd, photosB, 'items[]');
+      function appendBlobs(list, field){ for (var i=0;i<list.length;i++){ var b=list[i]; var nm=b.name || (field.replace('[]','')+'-shot-'+(i+1)+'.jpg'); fd.append(field, b, nm); } }
+      appendBlobs(photosA, 'comprobantes[]');
+      appendBlobs(photosB, 'items[]');
 
-      // Manifiesto (debug)
-      var manifest = { departamento: depEl.value || '', reporta: repEl.value || '', reg: regEl.value || '', pago_ars: pagoEl.value || '0' };
+      var manifest = { departamento: document.getElementById('departamento').value || '', reporta: document.getElementById('reporta').value || '', reg: document.getElementById('reg').value || '', pago_ars: document.getElementById('pago_ars').value || '0' };
       fd.append('manifest', new Blob([JSON.stringify(manifest)], {type:'application/json'}), 'manifest.json');
 
-      // Envío robusto (sin leer body para evitar cortes en Safari)
-      submitBtn.disabled = true; submitBtn.textContent = 'Enviando…';
-      setStatus('Enviando datos…');
-
-      var controller = new AbortController();
-      var timer = setTimeout(()=>controller.abort(), 25000);
-
+      // Envío robusto
+      submitBtn.disabled = true; submitBtn.textContent = 'Enviando…'; setStatus('Enviando datos…');
+      var controller = new AbortController(); var timer = setTimeout(()=>controller.abort(), 25000);
       fetch(WEBHOOK_URL, { method:'POST', body: fd, redirect:'follow', signal: controller.signal })
         .then(function(res){ clearTimeout(timer); if (!res.ok) throw new Error('HTTP '+res.status); })
-        .then(function(){
-          setStatus('Enviado con éxito ✅', true);
-          try{ localStorage.removeItem('wba_pending_reg'); }catch(_){}
-          var params = new URLSearchParams({ reg: regEl.value, departamento: depEl.value, reporta: repEl.value });
-          location.href = 'gracias.html?' + params.toString();
-        })
-        .catch(function(err){
-          console.error(err);
-          setStatus('No se pudo enviar. Revisá conexión o reintentá en unos segundos.', false);
-          submitBtn.disabled = false; submitBtn.textContent = 'Enviar';
-        });
+        .then(function(){ setStatus('Enviado con éxito ✅', true); try{ localStorage.removeItem('wba_pending_reg'); }catch(_){ } var p=new URLSearchParams({ reg: document.getElementById('reg').value, departamento: document.getElementById('departamento').value, reporta: document.getElementById('reporta').value }); location.href='gracias.html?'+p.toString(); })
+        .catch(function(err){ console.error(err); setStatus('No se pudo enviar. Revisá conexión o reintentá en unos segundos.', false); submitBtn.disabled=false; submitBtn.textContent='Enviar'; });
     });
   </script>
 </body>
