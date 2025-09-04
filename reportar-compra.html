@@ -1,4 +1,4 @@
-<!-- ===================== reportar-compra.html (FIX) ===================== -->
+<!-- ===================== reportar-compra.html (Compatibilidad total, sin ?. y con inputs estáticos) ===================== -->
 <!doctype html>
 <html lang="es">
 <head>
@@ -14,7 +14,7 @@ h1{ text-align:center; font-size:clamp(1.25rem,4.8vw,1.8rem); font-weight:800; m
 .sub{ text-align:center; margin:2px 0 16px; color:var(--muted); font-size:.98rem; min-height:1.4em }
 .card{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px }
 label{ display:block; margin:18px 0 8px; font-weight:600 }
-input[type=text], input[type=number]{ width:100%; padding:14px; border:1px solid var(--border); border-radius:12px; font-size:1rem; }
+input[type=text], input[type=number], input[type=file]{ width:100%; padding:14px; border:1px solid var(--border); border-radius:12px; font-size:1rem; }
 input:focus{ outline:none; border-color:#9ec1ff; box-shadow:0 0 0 3px rgba(37,99,235,.15) }
 .cam{ display:grid; gap:10px; margin-top:8px }
 video{ width:100%; border-radius:12px; background:#000 }
@@ -26,12 +26,7 @@ button{ appearance:none; border:0; border-radius:12px; padding:14px 16px; backgr
 .thumb img{ width:90px; height:90px; object-fit:cover; border-radius:10px; border:1px solid var(--border) }
 .thumb button{ position:absolute; top:4px; right:4px; border-radius:8px; padding:4px 6px; font-size:.8rem; background:#ef4444 }
 .status{ margin-top:10px; color:var(--muted); text-align:center; font-size:.95rem; min-height:1.5em }
-.error{ color:#b91c1c }
-.ok{ color:#065f46 }
-.hidden{ display:none }
-.file-fallback{ color:var(--muted); font-size:.9rem }
-input[type=file]{ display:block; width:100% }
-.busy{ opacity:.7; pointer-events:none }
+.error{ color:#b91c1c } .ok{ color:#065f46 } .hidden{ display:none }
 .net{ position:sticky; top:0; padding:8px 12px; border-radius:10px; background:#fee2e2; color:#991b1b; text-align:center; margin:6px auto 12px }
 .net.ok{ background:#dcfce7; color:#065f46 }
 .hint{ color:var(--muted); font-size:.9rem; margin-top:4px }
@@ -60,14 +55,18 @@ input[type=file]{ display:block; width:100% }
 <input id="pago_ars" name="pago_ars" type="hidden" />
 
 
-<!-- COMPROBANTES -->
-<label>Comprobantes (fotos) *</label>
-<div id="camComprobantes" class="cam"></div>
+<!-- COMPROBANTES (inputs visibles SIEMPRE) -->
+<label for="filesComprobantes">Comprobantes (fotos) *</label>
+<input id="filesComprobantes" type="file" accept="image/*" multiple name="comprobantes[]" />
+<div id="camComprobantes" class="cam hidden"></div>
+<div class="row"><button type="button" id="openCamA">Usar cámara</button></div>
 
 
-<!-- ITEMS COMPRADOS -->
-<label>Items comprados (fotos) *</label>
-<div id="camItems" class="cam"></div>
+<!-- ITEMS COMPRADOS (inputs visibles SIEMPRE) -->
+<label for="filesItems">Items comprados (fotos) *</label>
+<input id="filesItems" type="file" accept="image/*" multiple name="items[]" />
+<div id="camItems" class="cam hidden"></div>
+<div class="row"><button type="button" id="openCamB">Usar cámara</button></div>
 
 
 <div class="row" style="margin-top:16px">
@@ -75,54 +74,62 @@ input[type=file]{ display:block; width:100% }
 </div>
 <div id="status" class="status" role="status" aria-live="polite"></div>
 </form>
-<div class="mini">Si no ves controles de cámara o archivos, recargá la página. Siempre podés adjuntar desde el selector de archivos.</div>
+<div class="mini">Si la cámara no abre, podés adjuntar desde los campos de archivos de arriba.</div>
 </div>
 </div>
 
 
 <script>
-// ——— Helpers de storage seguros (evitan errores que cortan el script) ———
-const safe = {
-getLS(k){ try { return localStorage.getItem(k); } catch { return null; } },
-setLS(k,v){ try { localStorage.setItem(k,v); } catch {} },
-getSS(k){ try { return sessionStorage.getItem(k); } catch { return null; } },
-setSS(k,v){ try { sessionStorage.setItem(k,v); } catch {} },
-};
+// --- helpers de storage sin optional chaining ---
+function getLS(k){ try { return window.localStorage.getItem(k); } catch(e){ return null; } }
+function setLS(k,v){ try { window.localStorage.setItem(k,v); } catch(e){} }
 
 
-// ======================== CONFIG & QS ========================
-const qs = new URLSearchParams(location.search || '');
-const depQS = (qs.get('departamento') || '').trim();
-const repQS = (qs.get('reporta') || '').trim();
-let regQS = (qs.get('reg') || '').trim();
-const WEBHOOK_URL = 'https://optimaltm.app.n8n.cloud/webhook/wba-reporte-compra';
+// ======================== QS ========================
+var qs = new URLSearchParams(window.location.search || '');
+var depQS = (qs.get('departamento') || '').trim();
+var repQS = (qs.get('reporta') || '').trim();
+var regQS = (qs.get('reg') || '').trim();
 
 
-const netEl = document.getElementById('net');
-const statusEl = document.getElementById('status');
-const submitBtn = document.getElementById('submitBtn');
+var WEBHOOK_URL = 'https://optimaltm.app.n8n.cloud/webhook/wba-reporte-compra';
 
 
-if (depQS) {
-document.getElementById('departamento').value = depQS;
-document.getElementById('direccionDepto').textContent = depQS;
-}
-if (repQS) document.getElementById('reporta').value = repQS;
+if (depQS){ document.getElementById('departamento').value = depQS; document.getElementById('direccionDepto').textContent = depQS; }
+if (repQS){ document.getElementById('reporta').value = repQS; }
 
 
+// Idempotencia segura
 function uuid(){
-try { if (crypto?.randomUUID) return crypto.randomUUID(); } catch {}
-return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-const r = Math.random()*16|0, v = c === 'x' ? r : (r&0x3|0x8); return v.toString(16);
-});
+try {
+if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+if (window.crypto && window.crypto.getRandomValues){
+var a = new Uint8Array(16); window.crypto.getRandomValues(a);
+a[6] = (a[6] & 0x0f) | 0x40; a[8] = (a[8] & 0x3f) | 0x80;
+var b = Array.from(a).map((v,i)=> (i===4||i===6||i===8||i===10?'-':'') + ('0'+v.toString(16)).slice(-2)).join('');
+return b.replace(/-/g,'').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12}).*$/,'$1-$2-$3-$4-$5');
 }
-const regInput = document.getElementById('reg');
-if (!regQS) regQS = safe.getLS('wba_pending_reg') || uuid();
-regInput.value = regQS; safe.setLS('wba_pending_reg', regQS);
+} catch(e){}
+return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});
+}
+if (!regQS){ regQS = getLS('wba_pending_reg') || uuid(); }
+document.getElementById('reg').value = regQS; setLS('wba_pending_reg', regQS);
 
 
-function ok(msg){ statusEl.innerHTML = `<span class="ok">${msg}</span>`; }
-function err(msg){ statusEl.innerHTML = `<span class="error">${msg}</span>`; }
+// ======================== MONEDA ========================
+var pagoDisplay = document.getElementById('pagoDisplay');
+var pagoHidden = document.getElementById('pago_ars');
 
 
+function toNum(v){ if (v==null) return 0; var s=String(v).replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.').replace(/[^0-9.\-]/g,''); var n=parseFloat(s); return isFinite(n)?n:0; }
+function formatARS(n){ try { return new Intl.NumberFormat('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);} catch(e){ return (n||0).toFixed(2);} }
+function syncPagoFromDisplay(){ var n=toNum(pagoDisplay.value); pagoHidden.value=String(n); try{ var start=pagoDisplay.selectionStart; pagoDisplay.value=formatARS(n); pagoDisplay.setSelectionRange(start,start);}catch(e){ pagoDisplay.value=formatARS(n);} }
+pagoDisplay.addEventListener('input', syncPagoFromDisplay); pagoDisplay.addEventListener('blur', syncPagoFromDisplay);
+
+
+// ======================== CÁMARA (opcional) ========================
+function enableCamera(rootId, fileInputId){
+var root = document.getElementById(rootId); var fileInput = document.getElementById(fileInputId);
+if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ alert('La cámara no está disponible en este dispositivo/navegador.'); return; }
+root.innerHTML = '';
 </html>
