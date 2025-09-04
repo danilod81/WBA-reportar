@@ -1,4 +1,4 @@
-<!-- ===================== reportar-compra.html ===================== -->
+<!-- ===================== reportar-compra.html (FIX) ===================== -->
 <!doctype html>
 <html lang="es">
 <head>
@@ -35,6 +35,7 @@ input[type=file]{ display:block; width:100% }
 .net{ position:sticky; top:0; padding:8px 12px; border-radius:10px; background:#fee2e2; color:#991b1b; text-align:center; margin:6px auto 12px }
 .net.ok{ background:#dcfce7; color:#065f46 }
 .hint{ color:var(--muted); font-size:.9rem; margin-top:4px }
+.mini{ font-size:.85rem; color:#6b7280 }
 </style>
 </head>
 <body>
@@ -74,13 +75,23 @@ input[type=file]{ display:block; width:100% }
 </div>
 <div id="status" class="status" role="status" aria-live="polite"></div>
 </form>
+<div class="mini">Si no ves controles de cámara o archivos, recargá la página. Siempre podés adjuntar desde el selector de archivos.</div>
 </div>
 </div>
 
 
 <script>
+// ——— Helpers de storage seguros (evitan errores que cortan el script) ———
+const safe = {
+getLS(k){ try { return localStorage.getItem(k); } catch { return null; } },
+setLS(k,v){ try { localStorage.setItem(k,v); } catch {} },
+getSS(k){ try { return sessionStorage.getItem(k); } catch { return null; } },
+setSS(k,v){ try { sessionStorage.setItem(k,v); } catch {} },
+};
+
+
 // ======================== CONFIG & QS ========================
-const qs = new URLSearchParams(location.search);
+const qs = new URLSearchParams(location.search || '');
 const depQS = (qs.get('departamento') || '').trim();
 const repQS = (qs.get('reporta') || '').trim();
 let regQS = (qs.get('reg') || '').trim();
@@ -99,34 +110,19 @@ document.getElementById('direccionDepto').textContent = depQS;
 if (repQS) document.getElementById('reporta').value = repQS;
 
 
-// Idempotencia: generar reg si no vino
 function uuid(){
-return (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+try { if (crypto?.randomUUID) return crypto.randomUUID(); } catch {}
+return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
 const r = Math.random()*16|0, v = c === 'x' ? r : (r&0x3|0x8); return v.toString(16);
-}));
+});
 }
 const regInput = document.getElementById('reg');
-if (!regQS) {
-const fromStore = localStorage.getItem('wba_pending_reg');
-regQS = fromStore || uuid();
-}
-regInput.value = regQS;
-try { localStorage.setItem('wba_pending_reg', regQS); } catch {}
+if (!regQS) regQS = safe.getLS('wba_pending_reg') || uuid();
+regInput.value = regQS; safe.setLS('wba_pending_reg', regQS);
 
 
 function ok(msg){ statusEl.innerHTML = `<span class="ok">${msg}</span>`; }
 function err(msg){ statusEl.innerHTML = `<span class="error">${msg}</span>`; }
 
 
-// ======================== MONEDA (es-AR) ========================
-const pagoDisplay = document.getElementById('pagoDisplay');
-const pagoHidden = document.getElementById('pago_ars');
-
-
-function toNum(v){
-if (v == null) return 0;
-const s = String(v).replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.').replace(/[^0-9.\-]/g,'');
-const n = parseFloat(s);
-return isFinite(n) ? n : 0;
-}
 </html>
