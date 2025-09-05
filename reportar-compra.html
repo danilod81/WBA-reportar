@@ -44,9 +44,6 @@
     .overlay-thumbs .o-thumb img{ width:100%; height:100%; object-fit:cover }
     .overlay-thumbs .o-thumb .del{ position:absolute; top:2px; right:2px; background:rgba(185,28,28,.95); color:#fff; border:0; border-radius:8px; padding:2px 6px; font-size:.7rem; cursor:pointer }
     .overlay-badge{ position:absolute; right:12px; bottom:96px; background:rgba(17,24,39,.75); color:#fff; padding:6px 10px; border-radius:999px; font-weight:700; z-index:3 }
-
-    /* Aviso de cámara denegada */
-    .cam-warning{ display:flex; gap:10px; align-items:center; background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; border-radius:12px; padding:10px 12px; margin-top:10px }
   </style>
 </head>
 <body>
@@ -74,9 +71,6 @@
           <button type="button" id="btnFileA" class="muted-btn hidden">Subir archivo</button>
           <input id="filesComprobantes" class="hidden" type="file" accept="image/*" multiple name="comprobantes[]" />
         </div>
-        <div id="warnA" class="cam-warning hidden">
-          Cámara bloqueada. Podés <strong>Subir archivo</strong> o tocar <strong>Sacar foto</strong> para reintentar dar permiso.
-        </div>
         <div id="thumbsA" class="thumbs"></div>
 
         <!-- ITEMS COMPRADOS -->
@@ -85,9 +79,6 @@
           <button type="button" id="btnCamB">Sacar foto</button>
           <button type="button" id="btnFileB" class="muted-btn hidden">Subir archivo</button>
           <input id="filesItems" class="hidden" type="file" accept="image/*" multiple name="items[]" />
-        </div>
-        <div id="warnB" class="cam-warning hidden">
-          Cámara bloqueada. Podés <strong>Subir archivo</strong> o tocar <strong>Sacar foto</strong> para reintentar dar permiso.
         </div>
         <div id="thumbsB" class="thumbs"></div>
 
@@ -116,17 +107,14 @@
   </div>
 
   <script>
-    /* ======================== CONFIG ======================== */
     var WEBHOOK_URL = 'https://optimaltm.app.n8n.cloud/webhook/wba-reporte-compra';
 
-    /* ======================== Helpers ======================== */
     function getLS(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
     function setLS(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
     function toNum(v){ if (v==null) return 0; var s=String(v).replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.').replace(/[^0-9.\-]/g,''); var n=parseFloat(s); return isFinite(n)?n:0; }
     function formatARS(n){ try { return new Intl.NumberFormat('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);} catch(e){ return (n||0).toFixed(2);} }
     function uuid(){ try{ if (crypto && crypto.randomUUID) return crypto.randomUUID(); if (crypto && crypto.getRandomValues){ var a=new Uint8Array(16); crypto.getRandomValues(a); a[6]=(a[6]&0x0f)|0x40; a[8]=(a[8]&0x3f)|0x80; return Array.from(a).map((v,i)=>(i===4||i===6||i===8||i===10?'-':'')+('0'+v.toString(16)).slice(-2)).join(''); } }catch(_){} return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
 
-    /* ======================== QS e idempotencia ======================== */
     var qs = new URLSearchParams(location.search || '');
     var depQS = (qs.get('departamento') || '').trim();
     var repQS = (qs.get('reporta') || '').trim();
@@ -147,7 +135,6 @@
     pagoDisplay.addEventListener('input', syncPago);
     pagoDisplay.addEventListener('blur',  syncPago);
 
-    /* ======================== Cámara ======================== */
     function canUseCamera(){ return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
 
     var overlay = document.getElementById('overlay');
@@ -165,27 +152,21 @@
     var inputA = document.getElementById('filesComprobantes');
     var inputB = document.getElementById('filesItems');
 
-    var warnA = document.getElementById('warnA');
-    var warnB = document.getElementById('warnB');
-
     var stream = null;
-    var activeGroup = null; // 'A' o 'B'
+    var activeGroup = null;
 
-    var photosA = []; // comprobantes
-    var photosB = []; // items
+    var photosA = [];
+    var photosB = [];
     var thumbsA = document.getElementById('thumbsA');
     var thumbsB = document.getElementById('thumbsB');
 
-    // Si la API de cámara no existe, habilitamos "Subir archivo" de entrada
     if (!canUseCamera()){
       btnFileA.classList.remove('hidden'); inputA.classList.remove('hidden');
       btnFileB.classList.remove('hidden'); inputB.classList.remove('hidden');
     }
 
     async function openCamera(group){
-      // El botón "Sacar foto" siempre permite reintentar permisos
       if (!canUseCamera()){
-        // Fallback inmediato
         if (group==='A'){ btnFileA.classList.remove('hidden'); inputA.classList.remove('hidden'); inputA.click(); }
         else            { btnFileB.classList.remove('hidden'); inputB.classList.remove('hidden'); inputB.click(); }
         return;
@@ -197,14 +178,11 @@
       try{
         stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
         video.srcObject = stream; await video.play();
-        // Si venía bloqueada, ocultamos aviso
-        if (group==='A') warnA.classList.add('hidden'); else warnB.classList.add('hidden');
       }catch(e){
         console.error('getUserMedia error', e);
         closeCamera();
-        // Permiso denegado/error → habilitar fallback + aviso persistente + mantener botón Sacar foto para reintentar
-        if (group==='A'){ btnFileA.classList.remove('hidden'); inputA.classList.remove('hidden'); warnA.classList.remove('hidden'); }
-        else            { btnFileB.classList.remove('hidden'); inputB.classList.remove('hidden'); warnB.classList.remove('hidden'); }
+        if (group==='A'){ btnFileA.classList.remove('hidden'); inputA.classList.remove('hidden'); }
+        else            { btnFileB.classList.remove('hidden'); inputB.classList.remove('hidden'); }
       }
     }
 
@@ -257,89 +235,4 @@
       }
     }
 
-    async function takeShot(){
-      if (!video.videoWidth) return null;
-      var w=video.videoWidth, h=video.videoHeight;
-      var c=document.createElement('canvas'); c.width=w; c.height=h;
-      var ctx=c.getContext('2d'); ctx.drawImage(video,0,0,w,h);
-      return new Promise(function(res){ c.toBlob(function(blob){ res(blob||null); }, 'image/jpeg', 0.92); });
-    }
-
-    function addPhoto(group, file, name){
-      if (!file) return;
-      try{ file.name = name; }catch(_){ /* some browsers may not allow */ }
-      var arr = getArrayByGroup(group);
-      arr.push(file); // <-- push UNA sola vez
-      renderFormThumbs(group);
-      if (activeGroup===group) renderOverlayThumbs(group);
-    }
-
-    // Eventos UI
-    btnCamA.addEventListener('click', ()=> openCamera('A'));
-    btnCamB.addEventListener('click', ()=> openCamera('B'));
-
-    document.getElementById('btnFileA').addEventListener('click', ()=>{ inputA.classList.remove('hidden'); inputA.click(); });
-    document.getElementById('btnFileB').addEventListener('click', ()=>{ inputB.classList.remove('hidden'); inputB.click(); });
-
-    inputA.addEventListener('change', function(){ importInputFiles('A', inputA, 'comprobantes'); });
-    inputB.addEventListener('change', function(){ importInputFiles('B', inputB, 'items'); });
-
-    btnShot.addEventListener('click', async function(){
-      if (!activeGroup) return;
-      var blob = await takeShot(); if (!blob) return;
-      var prefix = (activeGroup==='A' ? 'comprobantes' : 'items');
-      var name = prefix + '-' + new Date().toISOString().replace(/[:.]/g,'') + '.jpg';
-      addPhoto(activeGroup, blob, name); // push once + render ambas vistas
-    });
-
-    btnOK.addEventListener('click', closeCamera);
-
-    function importInputFiles(group, inputEl, prefix){
-      var list = (inputEl && inputEl.files) ? inputEl.files : [];
-      for (var i=0; i<list.length; i++){
-        var f=list[i]; var name = prefix + '-' + (f.name || ('photo-'+(i+1)+'.jpg'));
-        addPhoto(group, f, name);
-      }
-      try{ inputEl.value=''; }catch(_){ }
-    }
-
-    /* ======================== Envío ======================== */
-    var form = document.getElementById('form');
-    var statusEl = document.getElementById('status');
-    var submitBtn = document.getElementById('submitBtn');
-
-    function setStatus(msg, ok){ statusEl.textContent = msg || ''; statusEl.classList.toggle('ok', !!ok); statusEl.classList.toggle('error', !ok); }
-
-    form.addEventListener('submit', function(e){
-      e.preventDefault(); closeCamera();
-      // Validaciones
-      var monto = toNum(document.getElementById('pagoDisplay').value); document.getElementById('pago_ars').value = String(monto);
-      if (!monto || !isFinite(monto)) { setStatus('Ingresá un monto válido en ARS.', false); return; }
-      if (photosA.length===0){ setStatus('Adjuntá al menos 1 comprobante.', false); return; }
-      if (photosB.length===0){ setStatus('Adjuntá al menos 1 foto de items comprados.', false); return; }
-
-      // Armado FormData (solo arrays)
-      var fd = new FormData();
-      fd.append('departamento', document.getElementById('departamento').value || '');
-      fd.append('reporta',      document.getElementById('reporta').value || '');
-      fd.append('reg',          document.getElementById('reg').value || '');
-      fd.append('pago_ars',     document.getElementById('pago_ars').value || '0');
-
-      function appendFiles(list, field){ for (var i=0;i<list.length;i++){ var b=list[i]; var nm=(b && b.name) ? b.name : (field.replace('[]','')+'-shot-'+(i+1)+'.jpg'); fd.append(field, b, nm); } }
-      appendFiles(photosA, 'comprobantes[]');
-      appendFiles(photosB, 'items[]');
-
-      var manifest = { departamento: document.getElementById('departamento').value || '', reporta: document.getElementById('reporta').value || '', reg: document.getElementById('reg').value || '', pago_ars: document.getElementById('pago_ars').value || '0' };
-      fd.append('manifest', new Blob([JSON.stringify(manifest)], {type:'application/json'}), 'manifest.json');
-
-      // Envío robusto
-      submitBtn.disabled = true; submitBtn.textContent = 'Enviando…'; setStatus('Enviando datos…');
-      var controller = new AbortController(); var timer = setTimeout(()=>controller.abort(), 25000);
-      fetch(WEBHOOK_URL, { method:'POST', body: fd, redirect:'follow', signal: controller.signal })
-        .then(function(res){ clearTimeout(timer); if (!res.ok) throw new Error('HTTP '+res.status); })
-        .then(function(){ setStatus('Enviado con éxito ✅', true); try{ localStorage.removeItem('wba_pending_reg'); }catch(_){ } var p=new URLSearchParams({ reg: document.getElementById('reg').value, departamento: document.getElementById('departamento').value, reporta: document.getElementById('reporta').value }); location.href='gracias.html?'+p.toString(); })
-        .catch(function(err){ console.error(err); setStatus('No se pudo enviar. Revisá conexión o reintentá en unos segundos.', false); submitBtn.disabled=false; submitBtn.textContent='Enviar'; });
-    });
-  </script>
-</body>
-</html>
+    async
