@@ -3,65 +3,69 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Reporte de Problema de mantenimiento</title>
+  <title>🔧 Reporte de Problema de mantenimiento</title>
   <style>
-    :root{ --bg:#f6f7fb; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#2563eb; --border:#e5e7eb; }
+    :root{ --bg:#f6f7fb; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#2563eb; --border:#e5e7eb; --danger:#b91c1c; --ok:#065f46; }
     *{ box-sizing:border-box }
     body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
-    .container{ max-width:680px; margin:0 auto; padding:20px 16px 40px }
+    .container{ max-width:680px; margin:0 auto; padding:20px 16px 56px }
     h1{ text-align:center; font-size:clamp(1.25rem,4.8vw,1.8rem); font-weight:800; margin:6px 0 2px }
     .sub{ text-align:center; margin:2px 0 16px; color:var(--muted); font-size:.98rem; min-height:1.4em }
     .card{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:20px }
     label{ display:block; margin:18px 0 8px; font-weight:600 }
     textarea{ width:100%; padding:14px; border:1px solid var(--border); border-radius:12px; font-size:1rem; min-height:120px; resize:vertical }
     textarea:focus{ outline:none; border-color:#9ec1ff; box-shadow:0 0 0 3px rgba(37,99,235,.15) }
-    .cam{ display:grid; gap:10px }
-    video{ width:100%; border-radius:12px; background:#000 }
-    .row{ display:flex; gap:10px; flex-wrap:wrap }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
     button{ appearance:none; border:0; border-radius:12px; padding:14px 16px; background:var(--primary); color:#fff; font-weight:600; cursor:pointer }
     .secondary{ background:#111827 }
-    .thumbs{ display:flex; gap:8px; flex-wrap:wrap }
-    .thumb{ position:relative }
-    .thumb img{ width:90px; height:90px; object-fit:cover; border-radius:10px; border:1px solid var(--border) }
-    .thumb button{ position:absolute; top:4px; right:4px; border-radius:8px; padding:4px 6px; font-size:.8rem; background:#ef4444 }
+    .muted-btn{ background:#e5e7eb; color:#111827 }
     .status{ margin-top:10px; color:var(--muted); text-align:center; font-size:.95rem; min-height:1.5em }
-    .error{ color:#b91c1c }
-    .ok{ color:#065f46 }
-    .hidden{ display:none }
-    .file-fallback{ color:var(--muted); font-size:.9rem }
-    input[type=file]{ display:block; width:100% }
-    .busy{ opacity:.7; pointer-events:none }
-    .net{ position:sticky; top:0; padding:8px 12px; border-radius:10px; background:#fee2e2; color:#991b1b; text-align:center; margin:6px auto 12px }
-    .net.ok{ background:#dcfce7; color:#065f46 }
+    .error{ color:var(--danger) } .ok{ color:var(--ok) } .hidden{ display:none }
+    .thumbs{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px }
+    .thumb{ position:relative; width:96px; height:96px; border-radius:10px; overflow:hidden; border:1px solid var(--border); background:#000 }
+    .thumb img{ width:100%; height:100%; object-fit:cover }
+    .thumb .del{ position:absolute; top:4px; right:4px; padding:4px 8px; font-size:.8rem; border-radius:8px; background:#b91c1c; color:#fff; border:0; cursor:pointer }
+
+    /* Overlay cámara (mismo estilo que Compras) */
+    .overlay{ position:fixed; inset:0; background:#000; display:none; z-index:1000; }
+    .overlay.show{ display:flex; align-items:center; justify-content:center; }
+    .cam-wrap{ position:relative; width:100%; height:100%; display:flex; flex-direction:column; }
+    .cam-title{ position:absolute; top:0; left:0; right:0; text-align:center; color:#fff; padding:12px; background:linear-gradient(180deg, rgba(0,0,0,.6), transparent); font-weight:700; z-index:3 }
+    .cam-video{ flex:1; position:relative; }
+    video{ width:100%; height:100%; object-fit:cover; background:#000; }
+    .cam-ui{ position:absolute; left:0; right:0; bottom:0; display:flex; gap:10px; padding:12px; background:linear-gradient(180deg, transparent, rgba(0,0,0,.6)); justify-content:center; z-index:3 }
+    .cam-ui button{ min-width:120px; border-radius:999px; padding:14px 18px; font-size:1.05rem; }
+
+    /* Thumbnails superpuestos en overlay */
+    .overlay-thumbs{ position:absolute; right:12px; top:12px; display:flex; flex-direction:column; gap:8px; max-height:50vh; overflow:auto; z-index:3 }
+    .overlay-thumbs .o-thumb{ position:relative; width:72px; height:72px; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,.35); box-shadow:0 2px 8px rgba(0,0,0,.35) }
+    .overlay-thumbs .o-thumb img{ width:100%; height:100%; object-fit:cover }
+    .overlay-thumbs .o-thumb .del{ position:absolute; top:2px; right:2px; background:rgba(185,28,28,.95); color:#fff; border:0; border-radius:8px; padding:2px 6px; font-size:.7rem; cursor:pointer }
+    .overlay-badge{ position:absolute; right:12px; bottom:96px; background:rgba(17,24,39,.75); color:#fff; padding:6px 10px; border-radius:999px; font-weight:700; z-index:3 }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>🔧 Reporte de Problema de mantenimiento</h1>
     <div id="direccionDepto" class="sub">Dirección del departamento</div>
-    <div id="net" class="net hidden">Sin conexión</div>
 
     <div class="card">
-      <form id="form" novalidate>
-        <!-- Hidden (QS) -->
+      <form id="form" method="post" enctype="multipart/form-data" novalidate>
+        <!-- Hidden (QS / idempotencia) -->
         <input type="hidden" id="departamento" name="departamento" />
         <input type="hidden" id="reporta" name="reporta" />
-        <input type="hidden" id="reg" name="reg" /> <!-- NUEVO -->
+        <input type="hidden" id="reg" name="reg" />
 
         <label for="descripcion">Detalle del problema *</label>
         <textarea id="descripcion" name="descripcion" placeholder="Contanos qué pasó, dónde y desde cuándo…" required></textarea>
 
-        <label>Fotos (sacadas ahora) *</label>
-        <div id="cameraBox" class="cam">
-          <video id="preview" playsinline autoplay muted></video>
-          <div class="row">
-            <button type="button" id="btnShot">📸 Tomar foto</button>
-            <button type="button" id="btnFlip">🔄 Cambiar cámara</button>
-          </div>
-          <div id="thumbs" class="thumbs"></div>
-          <div class="file-fallback hidden" id="fallbackNote">No pudimos acceder a la cámara. Usá este campo (intentará abrir la cámara del dispositivo):</div>
-          <input id="fallbackInput" class="hidden" type="file" name="media[]" accept="image/*" capture="environment" multiple>
+        <label>Fotos del problema *</label>
+        <div class="row">
+          <button type="button" id="btnCam">Sacar foto</button>
+          <button type="button" id="btnFile" class="muted-btn hidden">Subir archivo</button>
+          <input id="filesInput" class="hidden" type="file" accept="image/*" multiple name="media[]" />
         </div>
+        <div id="thumbs" class="thumbs"></div>
 
         <div class="row" style="margin-top:16px">
           <button id="submitBtn" class="secondary" type="submit">Enviar reporte</button>
@@ -71,260 +75,194 @@
     </div>
   </div>
 
+  <!-- Overlay Cámara -->
+  <div id="overlay" class="overlay" aria-hidden="true">
+    <div class="cam-wrap">
+      <div class="cam-title" id="camTitle">Cámara — Mantenimiento</div>
+      <div class="cam-video">
+        <video id="video" playsinline autoplay muted></video>
+        <div id="overlayThumbs" class="overlay-thumbs"></div>
+        <div id="overlayBadge" class="overlay-badge hidden">0 fotos</div>
+      </div>
+      <div class="cam-ui">
+        <button type="button" id="btnShot" class="secondary">Sacar foto</button>
+        <button type="button" id="btnOK" class="muted-btn">OK</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    // ========================
-    // CONFIG & UTILIDADES
-    // ========================
-    const qs = new URLSearchParams(location.search);
-    const depQS = (qs.get('departamento') || '').trim();
-    const repQS = (qs.get('reporta') || '').trim();
-    const regQS = (qs.get('reg') || '').trim(); // NUEVO
-    const WEBHOOK_URL = 'https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento';
+    /* ======================== CONFIG ======================== */
+    var WEBHOOK_URL = 'https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento';
 
-    const netEl = document.getElementById('net');
-    const statusEl = document.getElementById('status');
-    const submitBtn = document.getElementById('submitBtn');
+    /* ======================== Helpers ======================== */
+    function toNum(v){ var s=String(v||'').replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.'); var n=parseFloat(s); return isFinite(n)?n:0; }
+    function getLS(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+    function setLS(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+    function uuid(){ try{ if (crypto && crypto.randomUUID) return crypto.randomUUID(); if (crypto && crypto.getRandomValues){ var a=new Uint8Array(16); crypto.getRandomValues(a); a[6]=(a[6]&0x0f)|0x40; a[8]=(a[8]&0x3f)|0x80; return Array.from(a).map((v,i)=>(i===4||i===6||i===8||i===10?'-':'')+('0'+v.toString(16)).slice(-2)).join(''); } }catch(_){} return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
 
-    if (depQS) {
-      document.getElementById('departamento').value = depQS;
-      document.getElementById('direccionDepto').textContent = depQS;
-    }
-    if (repQS) document.getElementById('reporta').value = repQS;
-    if (regQS) document.getElementById('reg').value = regQS; // NUEVO
+    /* ======================== QS / idem ======================== */
+    var qs = new URLSearchParams(location.search || '');
+    var depQS = (qs.get('departamento') || '').trim();
+    var repQS = (qs.get('reporta') || '').trim();
+    var regQS = (qs.get('reg') || '').trim();
 
-    function ok(msg){ statusEl.innerHTML = `<span class="ok">${msg}</span>`; }
-    function err(msg){ statusEl.innerHTML = `<span class="error">${msg}</span>`; }
+    var depEl = document.getElementById('departamento');
+    var repEl = document.getElementById('reporta');
+    var regEl = document.getElementById('reg');
 
-    // ========================
-    // CÁMARA
-    // ========================
-    const video = document.getElementById('preview');
-    const btnShot = document.getElementById('btnShot');
-    const btnFlip = document.getElementById('btnFlip');
-    const thumbs = document.getElementById('thumbs');
-    const fallbackInput = document.getElementById('fallbackInput');
-    const fallbackNote = document.getElementById('fallbackNote');
+    if (depQS){ depEl.value = depQS; document.getElementById('direccionDepto').textContent = depQS; }
+    if (repQS){ repEl.value = repQS; }
+    if (!regQS){ regQS = getLS('wba_pending_reg_m') || uuid(); }
+    regEl.value = regQS; setLS('wba_pending_reg_m', regQS);
 
-    const MB = 1024 * 1024;
-    const MAX_FILES = 10;
-    const MAX_FILE_MB = 20;
+    /* ======================== Cámara ======================== */
+    function canUseCamera(){ return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
 
-    let stream = null;
-    let usingEnv = true; // cámara trasera por defecto
-    const shots = [];    // { blob, url }
+    var overlay = document.getElementById('overlay');
+    var overlayThumbs = document.getElementById('overlayThumbs');
+    var overlayBadge  = document.getElementById('overlayBadge');
+    var video = document.getElementById('video');
+    var btnShot = document.getElementById('btnShot');
+    var btnOK = document.getElementById('btnOK');
 
-    async function startCamera() {
-      try {
-        if (stream) stream.getTracks().forEach(t => t.stop());
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: usingEnv ? { exact: 'environment' } : 'user' },
-          audio: false
-        });
-        video.srcObject = stream;
-        video.classList.remove('hidden');
-        fallbackInput.classList.add('hidden');
-        fallbackNote.classList.add('hidden');
-      } catch (e) {
-        video.classList.add('hidden');
-        fallbackNote.classList.remove('hidden');
-        fallbackInput.classList.remove('hidden');
-      }
+    var btnCam = document.getElementById('btnCam');
+    var btnFile = document.getElementById('btnFile');
+    var inputEl = document.getElementById('filesInput');
+
+    var stream = null;
+    var photos = [];
+    var thumbs = document.getElementById('thumbs');
+
+    if (!canUseCamera()){
+      btnFile.classList.remove('hidden'); inputEl.classList.remove('hidden');
     }
 
-    function addThumb(blob) {
-      const url = URL.createObjectURL(blob);
-      shots.push({ blob, url });
-      const div = document.createElement('div');
-      div.className = 'thumb';
-      div.innerHTML = `<img src="${url}" alt="foto"><button type="button">✕</button>`;
-      div.querySelector('button').onclick = () => {
-        const i = shots.findIndex(s => s.url === url);
-        if (i >= 0) { URL.revokeObjectURL(shots[i].url); shots.splice(i,1); }
-        div.remove();
-      };
-      thumbs.appendChild(div);
-    }
-
-    btnShot.addEventListener('click', async () => {
-      statusEl.textContent = '';
-      if (shots.length >= MAX_FILES) return err(`Máximo ${MAX_FILES} fotos.`);
-      const rect = video.getBoundingClientRect();
-      const w = video.videoWidth || rect.width;
-      const h = video.videoHeight || rect.height;
-      const canvas = Object.assign(document.createElement('canvas'), { width: w, height: h });
-      canvas.getContext('2d').drawImage(video, 0, 0, w, h);
-      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.92));
-      if (!blob) return err('No se pudo capturar la foto.');
-      if (blob.size > MAX_FILE_MB * MB) return err(`La foto supera ${MAX_FILE_MB} MB.`);
-      addThumb(blob);
-    });
-
-    btnFlip.addEventListener('click', async () => { usingEnv = !usingEnv; await startCamera(); });
-    if (navigator.mediaDevices?.getUserMedia) startCamera();
-    else { video.classList.add('hidden'); fallbackNote.classList.remove('hidden'); fallbackInput.classList.remove('hidden'); }
-
-    // ========================
-    // INDEXEDDB (borrador + cola)
-    // ========================
-    const DB_NAME = 'wba-reporte-mantenimiento';
-    const DB_VERSION = 1;
-    let dbPromise = null;
-
-    function openDB(){
-      if (dbPromise) return dbPromise;
-      dbPromise = new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
-        req.onupgradeneeded = () => {
-          const db = req.result;
-          if (!db.objectStoreNames.contains('draft')) db.createObjectStore('draft', { keyPath: 'id' });
-          if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
-        };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-      return dbPromise;
-    }
-
-    async function dbPut(store, value){ const db = await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction(store,'readwrite'); tx.objectStore(store).put(value); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
-    async function dbGet(store, key){ const db = await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction(store,'readonly'); const req=tx.objectStore(store).get(key); req.onsuccess=()=>res(req.result||null); req.onerror=()=>rej(req.error); }); }
-    async function dbGetAll(store){ const db = await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction(store,'readonly'); const req=tx.objectStore(store).getAll(); req.onsuccess=()=>res(req.result||[]); req.onerror=()=>rej(req.error); }); }
-    async function dbDelete(store, key){ const db = await openDB(); return new Promise((res,rej)=>{ const tx=db.transaction(store,'readwrite'); tx.objectStore(store).delete(key); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
-
-    async function saveDraft(payload){ await dbPut('draft', { id:'current', ts:Date.now(), ...payload }); }
-    async function restoreDraftIfEmpty(){
-      const d = await dbGet('draft','current');
-      if (!d) return;
-      const descEl = document.getElementById('descripcion');
-      if (!descEl.value) descEl.value = d.descripcion || '';
-      // No restauramos imágenes (URLs temporales)
-    }
-    async function enqueue(payload){ await dbPut('queue', payload); }
-    async function flushQueue(){
-      if (!navigator.onLine) return;
-      const items = await dbGetAll('queue');
-      if (!items.length) return;
-      let okCount = 0;
-      for (const item of items){
-        try{
-          const sent = await sendPayload(item);
-          if (sent.ok){ await dbDelete('queue', item.id); okCount++; }
-          else break;
-        }catch{ break; }
-      }
-      if (okCount > 0) ok(`Se enviaron ${okCount} reporte(s) pendientes.`);
-    }
-
-    // ========================
-    // RED
-    // ========================
-    function updateNet(){
-      if (navigator.onLine){
-        netEl.textContent = 'Conectado';
-        netEl.classList.remove('hidden'); netEl.classList.add('ok');
-        setTimeout(()=>netEl.classList.add('hidden'), 1200);
-        flushQueue();
-      } else {
-        netEl.textContent = 'Sin conexión — podés guardar y lo enviamos cuando vuelva internet';
-        netEl.classList.remove('ok','hidden');
-      }
-    }
-    window.addEventListener('online', updateNet);
-    window.addEventListener('offline', updateNet);
-    updateNet();
-
-    // ========================
-    // ARMAR PAYLOAD + ENVÍO
-    // ========================
-    function gatherFiles(){
-      const out = [];
-      if (!fallbackInput.classList.contains('hidden')){
-        const files = Array.from(fallbackInput.files || []);
-        for (const f of files){ out.push({ name: f.name, type: f.type, blob: f }); }
-      } else {
-        for (let i=0;i<shots.length;i++){
-          const b = shots[i].blob;
-          out.push({ name:`foto-${i+1}.jpg`, type: b.type || 'image/jpeg', blob: b });
-        }
-      }
-      return out;
-    }
-
-    function buildPayload(){
-      const desc = (document.getElementById('descripcion').value || '').trim();
-      return {
-        departamento: depQS,
-        reporta: repQS,
-        reg: regQS, // NUEVO
-        descripcion: desc,
-        files: gatherFiles(),
-      };
-    }
-
-    async function sendPayload(payload){
-      const fd = new FormData();
-      fd.append('departamento', payload.departamento);
-      fd.append('reporta', payload.reporta);
-      fd.append('reg', payload.reg || '');      // NUEVO
-      fd.append('descripcion', payload.descripcion);
-      for (const f of payload.files) fd.append('media[]', f.blob, f.name);
-
-      const controller = new AbortController();
-      const to = setTimeout(()=>controller.abort(), 15000);
-
-      try{
-        const res = await fetch(WEBHOOK_URL, { method:'POST', body: fd, signal: controller.signal });
-        clearTimeout(to);
-        const text = await res.text().catch(()=> '');
-        let data = null; try{ data = JSON.parse(text); } catch{}
-        if (!res.ok) throw new Error(data?.message || text || `HTTP ${res.status} ${res.statusText}`);
-        return { ok: true, data };
-      }catch(e){
-        clearTimeout(to);
-        if (!navigator.onLine || e.name === 'AbortError' || /Failed to fetch|NetworkError/i.test(String(e.message))) throw e;
-        return { ok:false };
-      }
-    }
-
-    // ========================
-    // SUBMIT
-    // ========================
-    document.getElementById('form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      statusEl.classList.remove('error','ok');
-
-      const desc = (document.getElementById('descripcion').value || '').trim();
-      if (!depQS)  return err('Falta “departamento”.');
-      if (!repQS)  return err('Falta “reporta”.');
-      if (!desc)   return err('Completá la descripción.');
-
-      const payload = buildPayload();
-      if (!payload.files.length) return err('Adjuntá al menos una foto.');
-
-      submitBtn.classList.add('busy');
-      statusEl.textContent = 'Enviando…';
-
-      if (!navigator.onLine){
-        await saveDraft(payload); await enqueue(payload);
-        ok('Sin conexión: guardamos el reporte y lo enviaremos automáticamente.');
-        submitBtn.classList.remove('busy');
+    async function openCamera(){
+      if (!canUseCamera()){
+        btnFile.classList.remove('hidden'); inputEl.classList.remove('hidden'); inputEl.click();
         return;
       }
-
+      overlay.classList.add('show'); overlay.setAttribute('aria-hidden','false');
+      renderOverlay();
       try{
-        const sent = await sendPayload(payload);
-        if (!sent.ok) throw new Error('No confirmado');
-        ok('Enviado ✅');
+        stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false });
+        video.srcObject = stream; await video.play();
       }catch(e){
-        await saveDraft(payload); await enqueue(payload);
-        err('No pudimos confirmar el envío. Lo guardamos y reintentaremos automáticamente.');
-      } finally {
-        submitBtn.classList.remove('busy');
+        console.error('getUserMedia error', e);
+        closeCamera();
+        btnFile.classList.remove('hidden'); inputEl.classList.remove('hidden');
       }
+    }
+
+    function closeCamera(){
+      if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+      video.srcObject = null;
+      overlay.classList.remove('show'); overlay.setAttribute('aria-hidden','true');
+    }
+
+    function redrawBadge(){
+      var c = photos.length; overlayBadge.textContent = c + ' foto' + (c===1?'':'s');
+      overlayBadge.classList.toggle('hidden', c<=0);
+    }
+
+    function renderOverlay(){
+      overlayThumbs.innerHTML='';
+      for (var i=photos.length-1; i>=0; i--){
+        (function(file, idx){
+          var url = URL.createObjectURL(file);
+          var card = document.createElement('div'); card.className='o-thumb';
+          var img = document.createElement('img'); img.src=url; card.appendChild(img);
+          var del = document.createElement('button'); del.className='del'; del.textContent='X';
+          del.onclick = function(){ URL.revokeObjectURL(url); photos.splice(idx,1); renderOverlay(); renderFormThumbs(); };
+          card.appendChild(del); overlayThumbs.appendChild(card);
+        })(photos[i], i);
+      }
+      redrawBadge();
+    }
+
+    function renderFormThumbs(){
+      thumbs.innerHTML='';
+      for (var i=0; i<photos.length; i++){
+        (function(file, idx){
+          var url = URL.createObjectURL(file);
+          var card = document.createElement('div'); card.className='thumb';
+          var img = document.createElement('img'); img.src=url; card.appendChild(img);
+          var del = document.createElement('button'); del.className='del'; del.type='button'; del.textContent='X';
+          del.onclick = function(){ URL.revokeObjectURL(url); photos.splice(idx,1); renderFormThumbs(); renderOverlay(); };
+          card.appendChild(del); thumbs.appendChild(card);
+        })(photos[i], i);
+      }
+      redrawBadge();
+    }
+
+    async function takeShot(){
+      if (!video.videoWidth) return null;
+      var w=video.videoWidth, h=video.videoHeight;
+      var c=document.createElement('canvas'); c.width=w; c.height=h;
+      var ctx=c.getContext('2d'); ctx.drawImage(video,0,0,w,h);
+      return new Promise(function(res){ c.toBlob(function(blob){ res(blob||null); }, 'image/jpeg', 0.92); });
+    }
+
+    function addPhoto(file, name){
+      if (!file) return; try{ file.name = name; }catch(_){ }
+      photos.push(file); renderFormThumbs(); renderOverlay();
+    }
+
+    // Eventos UI cámara
+    btnCam.addEventListener('click', openCamera);
+    btnShot.addEventListener('click', async function(){
+      var blob = await takeShot(); if (!blob) return;
+      var name = 'mantenimiento-' + new Date().toISOString().replace(/[:.]/g,'') + '.jpg';
+      addPhoto(blob, name);
+    });
+    btnOK.addEventListener('click', closeCamera);
+
+    // Fallback de archivos
+    btnFile.addEventListener('click', ()=>{ inputEl.classList.remove('hidden'); inputEl.click(); });
+    inputEl.addEventListener('change', function(){
+      var list = (inputEl && inputEl.files) ? inputEl.files : [];
+      for (var i=0; i<list.length; i++){
+        var f=list[i]; var name = 'mantenimiento-' + (f.name || ('foto-'+(i+1)+'.jpg'));
+        addPhoto(f, name);
+      }
+      try{ inputEl.value=''; }catch(_){ }
     });
 
-    // Al iniciar
-    restoreDraftIfEmpty();
-    flushQueue();
+    /* ======================== Envío ======================== */
+    var form = document.getElementById('form');
+    var statusEl = document.getElementById('status');
+    var submitBtn = document.getElementById('submitBtn');
+
+    function setStatus(msg, ok){ statusEl.textContent = msg || ''; statusEl.classList.toggle('ok', !!ok); statusEl.classList.toggle('error', !ok); }
+
+    form.addEventListener('submit', function(e){
+      e.preventDefault(); closeCamera();
+      var desc = (document.getElementById('descripcion').value||'').trim();
+      if (!desc){ setStatus('Completá el detalle del problema.', false); return; }
+      if (photos.length===0){ setStatus('Adjuntá al menos 1 foto.', false); return; }
+
+      var fd = new FormData();
+      fd.append('departamento', document.getElementById('departamento').value || '');
+      fd.append('reporta',      document.getElementById('reporta').value || '');
+      fd.append('reg',          document.getElementById('reg').value || '');
+      fd.append('descripcion',  desc);
+
+      for (var i=0;i<photos.length;i++){
+        var b=photos[i]; var nm=b.name || ('mantenimiento-shot-'+(i+1)+'.jpg');
+        fd.append('media[]', b, nm);
+      }
+
+      submitBtn.disabled = true; submitBtn.textContent = 'Enviando…'; setStatus('Enviando datos…');
+      var controller = new AbortController(); var timer = setTimeout(()=>controller.abort(), 25000);
+      fetch(WEBHOOK_URL, { method:'POST', body: fd, redirect:'follow', signal: controller.signal })
+        .then(function(res){ clearTimeout(timer); if (!res.ok) throw new Error('HTTP '+res.status); })
+        .then(function(){ setStatus('Enviado con éxito ✅', true); try{ localStorage.removeItem('wba_pending_reg_m'); }catch(_){ }
+              var p=new URLSearchParams({ reg: document.getElementById('reg').value, departamento: document.getElementById('departamento').value, reporta: document.getElementById('reporta').value });
+              location.href='gracias.html?'+p.toString();
+        })
+        .catch(function(err){ console.error(err); setStatus('No se pudo enviar. Revisá conexión o reintentá en unos segundos.', false); submitBtn.disabled=false; submitBtn.textContent='Enviar reporte'; });
+    });
   </script>
 </body>
 </html>
