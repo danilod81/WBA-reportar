@@ -44,6 +44,9 @@
     .overlay-thumbs .o-thumb img{ width:100%; height:100%; object-fit:cover }
     .overlay-thumbs .o-thumb .del{ position:absolute; top:2px; right:2px; background:rgba(185,28,28,.95); color:#fff; border:0; border-radius:8px; padding:2px 6px; font-size:.7rem; cursor:pointer }
     .overlay-badge{ position:absolute; right:12px; bottom:96px; background:rgba(17,24,39,.75); color:#fff; padding:6px 10px; border-radius:999px; font-weight:700; z-index:3 }
+
+    /* Aviso de cámara denegada */
+    .cam-warning{ display:flex; gap:10px; align-items:center; background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; border-radius:12px; padding:10px 12px; margin-top:10px }
   </style>
 </head>
 <body>
@@ -62,14 +65,17 @@
         <!-- PAGO ARS -->
         <label for="pagoDisplay">Pago ARS *</label>
         <input id="pagoDisplay" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off" />
-        <div class="hint">Se muestra con separadores (12.345,67) pero se envía como número.</div>
+        <div class="hint">Debe coincidir con el total gastado.</div>
 
         <!-- COMPROBANTES -->
-        <label>Comprobantes (fotos) *</nlabel>
+        <label>Comprobantes (fotos) *</label>
         <div class="row">
           <button type="button" id="btnCamA">Sacar foto</button>
           <button type="button" id="btnFileA" class="muted-btn hidden">Subir archivo</button>
           <input id="filesComprobantes" class="hidden" type="file" accept="image/*" multiple name="comprobantes[]" />
+        </div>
+        <div id="warnA" class="cam-warning hidden">
+          Cámara bloqueada. Podés <strong>Subir archivo</strong> o tocar <strong>Sacar foto</strong> para reintentar dar permiso.
         </div>
         <div id="thumbsA" class="thumbs"></div>
 
@@ -80,6 +86,9 @@
           <button type="button" id="btnFileB" class="muted-btn hidden">Subir archivo</button>
           <input id="filesItems" class="hidden" type="file" accept="image/*" multiple name="items[]" />
         </div>
+        <div id="warnB" class="cam-warning hidden">
+          Cámara bloqueada. Podés <strong>Subir archivo</strong> o tocar <strong>Sacar foto</strong> para reintentar dar permiso.
+        </div>
         <div id="thumbsB" class="thumbs"></div>
 
         <div class="row" style="margin-top:16px">
@@ -87,12 +96,11 @@
         </div>
         <div id="status" class="status" role="status" aria-live="polite"></div>
       </form>
-      <div class="mini">Si la cámara no está disponible o se negó permiso, aparecerá "Subir archivo".</div>
     </div>
   </div>
 
   <!-- Overlay Cámara -->
-  <div id="overlay" class="overlay">
+  <div id="overlay" class="overlay" aria-hidden="true">
     <div class="cam-wrap">
       <div class="cam-title" id="camTitle">Cámara</div>
       <div class="cam-video">
@@ -157,6 +165,9 @@
     var inputA = document.getElementById('filesComprobantes');
     var inputB = document.getElementById('filesItems');
 
+    var warnA = document.getElementById('warnA');
+    var warnB = document.getElementById('warnB');
+
     var stream = null;
     var activeGroup = null; // 'A' o 'B'
 
@@ -165,13 +176,14 @@
     var thumbsA = document.getElementById('thumbsA');
     var thumbsB = document.getElementById('thumbsB');
 
-    // Mostrar opción "Subir archivo" SOLO si no hay API de cámara
+    // Si la API de cámara no existe, habilitamos "Subir archivo" de entrada
     if (!canUseCamera()){
       btnFileA.classList.remove('hidden'); inputA.classList.remove('hidden');
       btnFileB.classList.remove('hidden'); inputB.classList.remove('hidden');
     }
 
     async function openCamera(group){
+      // El botón "Sacar foto" siempre permite reintentar permisos
       if (!canUseCamera()){
         // Fallback inmediato
         if (group==='A'){ btnFileA.classList.remove('hidden'); inputA.classList.remove('hidden'); inputA.click(); }
@@ -180,52 +192,72 @@
       }
       activeGroup = group;
       camTitle.textContent = (group==='A' ? 'Cámara — Comprobantes' : 'Cámara — Items comprados');
-      overlay.classList.add('show');
-      redrawOverlayFromArrays();
+      overlay.classList.add('show'); overlay.setAttribute('aria-hidden','false');
+      renderOverlayThumbs(group);
       try{
         stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
         video.srcObject = stream; await video.play();
+        // Si venía bloqueada, ocultamos aviso
+        if (group==='A') warnA.classList.add('hidden'); else warnB.classList.add('hidden');
       }catch(e){
         console.error('getUserMedia error', e);
-        overlay.classList.remove('show');
-        activeGroup = null;
-        // Permiso denegado/error → habilitar fallback
-        if (group==='A'){ btnFileA.classList.remove('hidden'); inputA.classList.remove('hidden'); inputA.click(); }
-        else            { btnFileB.classList.remove('hidden'); inputB.classList.remove('hidden'); inputB.click(); }
+        closeCamera();
+        // Permiso denegado/error → habilitar fallback + aviso persistente + mantener botón Sacar foto para reintentar
+        if (group==='A'){ btnFileA.classList.remove('hidden'); inputA.classList.remove('hidden'); warnA.classList.remove('hidden'); }
+        else            { btnFileB.classList.remove('hidden'); inputB.classList.remove('hidden'); warnB.classList.remove('hidden'); }
       }
     }
 
     function closeCamera(){
       if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
       video.srcObject = null;
-      overlay.classList.remove('show');
+      overlay.classList.remove('show'); overlay.setAttribute('aria-hidden','true');
       activeGroup = null;
     }
 
-    function countForActive(){ return (activeGroup==='A' ? photosA.length : photosB.length); }
-    function redrawOverlayBadge(){
-      var c = countForActive();
+    function getArrayByGroup(group){ return group==='A' ? photosA : photosB; }
+
+    function redrawOverlayBadge(group){
+      var c = getArrayByGroup(group).length;
       overlayBadge.textContent = (c||0) + ' foto' + (c===1?'':'s');
       overlayBadge.classList.toggle('hidden', c<=0);
     }
-    function redrawOverlayFromArrays(){
+
+    function renderOverlayThumbs(group){
       overlayThumbs.innerHTML='';
-      var arr = (activeGroup==='A'? photosA : photosB);
+      var arr = getArrayByGroup(group);
       for (var i=arr.length-1; i>=0; i--){
-        (function(b){
-          var url = URL.createObjectURL(b);
+        (function(file, idx){
+          var url = URL.createObjectURL(file);
           var card = document.createElement('div'); card.className='o-thumb';
           var img = document.createElement('img'); img.src=url; card.appendChild(img);
           var del = document.createElement('button'); del.className='del'; del.textContent='X';
-          del.onclick = function(){ URL.revokeObjectURL(url); var idx=arr.indexOf(b); if(idx>=0) arr.splice(idx,1); card.remove(); redrawOverlayBadge(); };
+          del.onclick = function(){ URL.revokeObjectURL(url); arr.splice(idx,1); renderOverlayThumbs(group); renderFormThumbs(group); };
           card.appendChild(del);
           overlayThumbs.appendChild(card);
-        })(arr[i]);
+        })(arr[i], i);
       }
-      redrawOverlayBadge();
+      redrawOverlayBadge(group);
     }
 
-    function takeShot(){
+    function renderFormThumbs(group){
+      var arr = getArrayByGroup(group);
+      var container = (group==='A') ? thumbsA : thumbsB;
+      container.innerHTML='';
+      for (var i=0; i<arr.length; i++){
+        (function(file, idx){
+          var url = URL.createObjectURL(file);
+          var card = document.createElement('div'); card.className='thumb';
+          var img = document.createElement('img'); img.src=url; card.appendChild(img);
+          var del = document.createElement('button'); del.className='del'; del.type='button'; del.textContent='X';
+          del.onclick = function(){ URL.revokeObjectURL(url); arr.splice(idx,1); renderFormThumbs(group); if (activeGroup===group) renderOverlayThumbs(group); };
+          card.appendChild(del);
+          container.appendChild(card);
+        })(arr[i], i);
+      }
+    }
+
+    async function takeShot(){
       if (!video.videoWidth) return null;
       var w=video.videoWidth, h=video.videoHeight;
       var c=document.createElement('canvas'); c.width=w; c.height=h;
@@ -233,53 +265,40 @@
       return new Promise(function(res){ c.toBlob(function(blob){ res(blob||null); }, 'image/jpeg', 0.92); });
     }
 
-    function addFormThumb(container, arr, blob, name){
-      var url = URL.createObjectURL(blob); blob.name = name; arr.push(blob);
-      var card = document.createElement('div'); card.className = 'thumb';
-      var img = document.createElement('img'); img.src = url; card.appendChild(img);
-      var del = document.createElement('button'); del.className='del'; del.type='button'; del.textContent='X';
-      del.onclick = function(){ URL.revokeObjectURL(url); var idx=arr.indexOf(blob); if(idx>=0) arr.splice(idx,1); card.remove(); if (activeGroup) redrawOverlayFromArrays(); };
-      card.appendChild(del); container.appendChild(card);
-    }
-
-    function addOverlayThumb(arr, blob, name){
-      var url = URL.createObjectURL(blob); blob.name = name; arr.push(blob);
-      var card = document.createElement('div'); card.className='o-thumb';
-      var img = document.createElement('img'); img.src=url; card.appendChild(img);
-      var del = document.createElement('button'); del.className='del'; del.textContent='X';
-      del.onclick = function(){ URL.revokeObjectURL(url); var idx=arr.indexOf(blob); if(idx>=0) arr.splice(idx,1); card.remove(); redrawOverlayBadge(); };
-      card.appendChild(del); overlayThumbs.prepend(card); redrawOverlayBadge();
+    function addPhoto(group, file, name){
+      if (!file) return;
+      try{ file.name = name; }catch(_){ /* some browsers may not allow */ }
+      var arr = getArrayByGroup(group);
+      arr.push(file); // <-- push UNA sola vez
+      renderFormThumbs(group);
+      if (activeGroup===group) renderOverlayThumbs(group);
     }
 
     // Eventos UI
-    document.getElementById('btnCamA').addEventListener('click', ()=> openCamera('A'));
-    document.getElementById('btnCamB').addEventListener('click', ()=> openCamera('B'));
+    btnCamA.addEventListener('click', ()=> openCamera('A'));
+    btnCamB.addEventListener('click', ()=> openCamera('B'));
 
     document.getElementById('btnFileA').addEventListener('click', ()=>{ inputA.classList.remove('hidden'); inputA.click(); });
     document.getElementById('btnFileB').addEventListener('click', ()=>{ inputB.classList.remove('hidden'); inputB.click(); });
 
-    inputA.addEventListener('change', function(){ importInputFilesToArray(inputA, thumbsA, photosA, 'comprobantes'); });
-    inputB.addEventListener('change', function(){ importInputFilesToArray(inputB, thumbsB, photosB, 'items'); });
+    inputA.addEventListener('change', function(){ importInputFiles('A', inputA, 'comprobantes'); });
+    inputB.addEventListener('change', function(){ importInputFiles('B', inputB, 'items'); });
 
     btnShot.addEventListener('click', async function(){
-      var blob = await takeShot(); if (!blob || !activeGroup) return;
+      if (!activeGroup) return;
+      var blob = await takeShot(); if (!blob) return;
       var prefix = (activeGroup==='A' ? 'comprobantes' : 'items');
       var name = prefix + '-' + new Date().toISOString().replace(/[:.]/g,'') + '.jpg';
-      // 1) Superponer en overlay
-      addOverlayThumb(activeGroup==='A'?photosA:photosB, blob, name);
-      // 2) Reflejar en thumbnails del formulario
-      if (activeGroup==='A') addFormThumb(thumbsA, photosA, blob, name);
-      else                   addFormThumb(thumbsB, photosB, blob, name);
+      addPhoto(activeGroup, blob, name); // push once + render ambas vistas
     });
 
     btnOK.addEventListener('click', closeCamera);
 
-    function importInputFilesToArray(inputEl, container, arr, prefix){
+    function importInputFiles(group, inputEl, prefix){
       var list = (inputEl && inputEl.files) ? inputEl.files : [];
       for (var i=0; i<list.length; i++){
         var f=list[i]; var name = prefix + '-' + (f.name || ('photo-'+(i+1)+'.jpg'));
-        var blob = new Blob([f], { type: f.type || 'image/jpeg' });
-        addFormThumb(container, arr, blob, name);
+        addPhoto(group, f, name);
       }
       try{ inputEl.value=''; }catch(_){ }
     }
@@ -306,9 +325,9 @@
       fd.append('reg',          document.getElementById('reg').value || '');
       fd.append('pago_ars',     document.getElementById('pago_ars').value || '0');
 
-      function appendBlobs(list, field){ for (var i=0;i<list.length;i++){ var b=list[i]; var nm=b.name || (field.replace('[]','')+'-shot-'+(i+1)+'.jpg'); fd.append(field, b, nm); } }
-      appendBlobs(photosA, 'comprobantes[]');
-      appendBlobs(photosB, 'items[]');
+      function appendFiles(list, field){ for (var i=0;i<list.length;i++){ var b=list[i]; var nm=(b && b.name) ? b.name : (field.replace('[]','')+'-shot-'+(i+1)+'.jpg'); fd.append(field, b, nm); } }
+      appendFiles(photosA, 'comprobantes[]');
+      appendFiles(photosB, 'items[]');
 
       var manifest = { departamento: document.getElementById('departamento').value || '', reporta: document.getElementById('reporta').value || '', reg: document.getElementById('reg').value || '', pago_ars: document.getElementById('pago_ars').value || '0' };
       fd.append('manifest', new Blob([JSON.stringify(manifest)], {type:'application/json'}), 'manifest.json');
