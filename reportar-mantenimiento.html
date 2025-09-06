@@ -23,23 +23,25 @@
     .error{ color:var(--danger) } .ok{ color:var(--ok) } .hidden{ display:none }
     .thumbs{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px }
     .thumb{ position:relative; width:96px; height:96px; border-radius:10px; overflow:hidden; border:1px solid var(--border); background:#000 }
-    .thumb img{ width:100%; height:100%; object-fit:cover }
+    .thumb img,.thumb video{ width:100%; height:100%; object-fit:cover }
     .thumb .del{ position:absolute; top:4px; right:4px; padding:4px 8px; font-size:.8rem; border-radius:8px; background:#b91c1c; color:#fff; border:0; cursor:pointer }
 
-    /* Overlay cámara (mismo estilo que Compras) */
+    /* Overlay cámara */
     .overlay{ position:fixed; inset:0; background:#000; display:none; z-index:1000; }
     .overlay.show{ display:flex; align-items:center; justify-content:center; }
     .cam-wrap{ position:relative; width:100%; height:100%; display:flex; flex-direction:column; }
     .cam-title{ position:absolute; top:0; left:0; right:0; text-align:center; color:#fff; padding:12px; background:linear-gradient(180deg, rgba(0,0,0,.6), transparent); font-weight:700; z-index:3 }
     .cam-video{ flex:1; position:relative; }
-    video{ width:100%; height:100%; object-fit:cover; background:#000; }
-    .cam-ui{ position:absolute; left:0; right:0; bottom:0; display:flex; gap:10px; padding:12px; background:linear-gradient(180deg, transparent, rgba(0,0,0,.6)); justify-content:center; z-index:3 }
+    video#video{ width:100%; height:100%; object-fit:cover; background:#000; }
+    .cam-ui{ position:absolute; left:0; right:0; bottom:0; display:flex; gap:10px; padding:12px; background:linear-gradient(180deg, transparent, rgba(0,0,0,.6)); justify-content:center; z-index:3; flex-wrap:wrap }
     .cam-ui button{ min-width:120px; border-radius:999px; padding:14px 18px; font-size:1.05rem; }
+    .mode-btn{ background:#1f2937 }
+    .mode-btn.active{ background:#2563eb; color:#fff }
 
     /* Thumbnails superpuestos en overlay */
     .overlay-thumbs{ position:absolute; right:12px; top:12px; display:flex; flex-direction:column; gap:8px; max-height:50vh; overflow:auto; z-index:3 }
     .overlay-thumbs .o-thumb{ position:relative; width:72px; height:72px; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,.35); box-shadow:0 2px 8px rgba(0,0,0,.35) }
-    .overlay-thumbs .o-thumb img{ width:100%; height:100%; object-fit:cover }
+    .overlay-thumbs .o-thumb img,.overlay-thumbs .o-thumb video{ width:100%; height:100%; object-fit:cover }
     .overlay-thumbs .o-thumb .del{ position:absolute; top:2px; right:2px; background:rgba(185,28,28,.95); color:#fff; border:0; border-radius:8px; padding:2px 6px; font-size:.7rem; cursor:pointer }
     .overlay-badge{ position:absolute; right:12px; bottom:96px; background:rgba(17,24,39,.75); color:#fff; padding:6px 10px; border-radius:999px; font-weight:700; z-index:3 }
   </style>
@@ -59,11 +61,15 @@
         <label for="descripcion">Detalle del problema *</label>
         <textarea id="descripcion" name="descripcion" placeholder="Contanos qué pasó, dónde y desde cuándo…" required></textarea>
 
-        <label>Fotos del problema *</label>
+        <label>Medios del problema (fotos y/o videos) *</label>
         <div class="row">
-          <button type="button" id="btnCam">Sacar foto</button>
-          <button type="button" id="btnFile" class="muted-btn hidden">Subir archivo</button>
-          <input id="filesInput" class="hidden" type="file" accept="image/*" multiple name="media[]" />
+          <button type="button" id="btnCam" class="">Abrir cámara</button>
+          <button type="button" id="btnFileImg" class="muted-btn hidden">Subir fotos</button>
+          <button type="button" id="btnFileVid" class="muted-btn hidden">Subir videos</button>
+
+          <!-- Fallback inputs (se activan cuando no hay cámara o se eligen “Subir”) -->
+          <input id="filesInput"  class="hidden" type="file" accept="image/*" multiple name="media[]" />
+          <input id="videosInput" class="hidden" type="file" accept="video/*" multiple name="media[]" />
         </div>
         <div id="thumbs" class="thumbs"></div>
 
@@ -82,10 +88,16 @@
       <div class="cam-video">
         <video id="video" playsinline autoplay muted></video>
         <div id="overlayThumbs" class="overlay-thumbs"></div>
-        <div id="overlayBadge" class="overlay-badge hidden">0 fotos</div>
+        <div id="overlayBadge" class="overlay-badge hidden">0 medios</div>
       </div>
       <div class="cam-ui">
+        <button type="button" id="btnModePhoto" class="mode-btn active">📷 Foto</button>
+        <button type="button" id="btnModeVideo" class="mode-btn">🎥 Video</button>
+
         <button type="button" id="btnShot" class="secondary">Sacar foto</button>
+        <button type="button" id="btnRec" class="hidden">● Grabar</button>
+        <button type="button" id="btnStop" class="hidden">■ Detener</button>
+
         <button type="button" id="btnOK" class="muted-btn">OK</button>
       </div>
     </div>
@@ -96,10 +108,11 @@
     var WEBHOOK_URL = 'https://optimaltm.app.n8n.cloud/webhook/wba-reporte-mantenimiento';
 
     /* ======================== Helpers ======================== */
-    function toNum(v){ var s=String(v||'').replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.'); var n=parseFloat(s); return isFinite(n)?n:0; }
     function getLS(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
     function setLS(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
     function uuid(){ try{ if (crypto && crypto.randomUUID) return crypto.randomUUID(); if (crypto && crypto.getRandomValues){ var a=new Uint8Array(16); crypto.getRandomValues(a); a[6]=(a[6]&0x0f)|0x40; a[8]=(a[8]&0x3f)|0x80; return Array.from(a).map((v,i)=>(i===4||i===6||i===8||i===10?'-':'')+('0'+v.toString(16)).slice(-2)).join(''); } }catch(_){} return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
+    function canUseCamera(){ return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
+    function canRecord(){ return typeof window.MediaRecorder !== 'undefined'; }
 
     /* ======================== QS / idem ======================== */
     var qs = new URLSearchParams(location.search || '');
@@ -116,9 +129,7 @@
     if (!regQS){ regQS = getLS('wba_pending_reg_m') || uuid(); }
     regEl.value = regQS; setLS('wba_pending_reg_m', regQS);
 
-    /* ======================== Cámara ======================== */
-    function canUseCamera(){ return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
-
+    /* ======================== Cámara / Video ======================== */
     var overlay = document.getElementById('overlay');
     var overlayThumbs = document.getElementById('overlayThumbs');
     var overlayBadge  = document.getElementById('overlayBadge');
@@ -127,47 +138,53 @@
     var btnOK = document.getElementById('btnOK');
 
     var btnCam = document.getElementById('btnCam');
-    var btnFile = document.getElementById('btnFile');
-    var inputEl = document.getElementById('filesInput');
+    var btnFileImg = document.getElementById('btnFileImg');
+    var btnFileVid = document.getElementById('btnFileVid');
+    var inputImg = document.getElementById('filesInput');
+    var inputVid = document.getElementById('videosInput');
+
+    var btnModePhoto = document.getElementById('btnModePhoto');
+    var btnModeVideo = document.getElementById('btnModeVideo');
+    var btnRec = document.getElementById('btnRec');
+    var btnStop = document.getElementById('btnStop');
 
     var stream = null;
+    var camMode = 'photo'; // 'photo' | 'video'
     var photos = [];
+    var videos = [];
     var thumbs = document.getElementById('thumbs');
 
+    // MediaRecorder
+    var mediaRecorder = null;
+    var recordedChunks = [];
+
+    // Fallback si no hay cámara
     if (!canUseCamera()){
-      btnFile.classList.remove('hidden'); inputEl.classList.remove('hidden');
-    }
-
-    async function openCamera(){
-      if (!canUseCamera()){
-        btnFile.classList.remove('hidden'); inputEl.classList.remove('hidden'); inputEl.click();
-        return;
-      }
-      overlay.classList.add('show'); overlay.setAttribute('aria-hidden','false');
-      renderOverlay();
-      try{
-        stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false });
-        video.srcObject = stream; await video.play();
-      }catch(e){
-        console.error('getUserMedia error', e);
-        closeCamera();
-        btnFile.classList.remove('hidden'); inputEl.classList.remove('hidden');
+      btnFileImg.classList.remove('hidden');
+      btnFileVid.classList.remove('hidden');
+      inputImg.classList.remove('hidden');
+      inputVid.classList.remove('hidden');
+    } else {
+      // Si hay cámara pero NO hay MediaRecorder, permitir igualmente subir videos
+      if (!canRecord()){
+        btnFileVid.classList.remove('hidden');
+        inputVid.classList.remove('hidden');
       }
     }
 
-    function closeCamera(){
-      if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-      video.srcObject = null;
-      overlay.classList.remove('show'); overlay.setAttribute('aria-hidden','true');
+    function badgeText(){
+      var c = photos.length + videos.length;
+      return c + ' medio' + (c===1 ? '' : 's');
     }
-
     function redrawBadge(){
-      var c = photos.length; overlayBadge.textContent = c + ' foto' + (c===1?'':'s');
+      var c = photos.length + videos.length;
+      overlayBadge.textContent = badgeText();
       overlayBadge.classList.toggle('hidden', c<=0);
     }
 
     function renderOverlay(){
       overlayThumbs.innerHTML='';
+      // Fotos (últimas primero)
       for (var i=photos.length-1; i>=0; i--){
         (function(file, idx){
           var url = URL.createObjectURL(file);
@@ -178,11 +195,23 @@
           card.appendChild(del); overlayThumbs.appendChild(card);
         })(photos[i], i);
       }
+      // Videos (últimos primero)
+      for (var j=videos.length-1; j>=0; j--){
+        (function(file, idx){
+          var url = URL.createObjectURL(file);
+          var card = document.createElement('div'); card.className='o-thumb';
+          var v = document.createElement('video'); v.src=url; v.muted=true; v.playsInline=true; card.appendChild(v);
+          var del = document.createElement('button'); del.className='del'; del.textContent='X';
+          del.onclick = function(){ URL.revokeObjectURL(url); videos.splice(idx,1); renderOverlay(); renderFormThumbs(); };
+          card.appendChild(del); overlayThumbs.appendChild(card);
+        })(videos[j], j);
+      }
       redrawBadge();
     }
 
     function renderFormThumbs(){
       thumbs.innerHTML='';
+      // Fotos
       for (var i=0; i<photos.length; i++){
         (function(file, idx){
           var url = URL.createObjectURL(file);
@@ -193,7 +222,124 @@
           card.appendChild(del); thumbs.appendChild(card);
         })(photos[i], i);
       }
+      // Videos
+      for (var j=0; j<videos.length; j++){
+        (function(file, idx){
+          var url = URL.createObjectURL(file);
+          var card = document.createElement('div'); card.className='thumb';
+          var v = document.createElement('video'); v.src=url; v.controls=true; v.playsInline=true; card.appendChild(v);
+          var del = document.createElement('button'); del.className='del'; del.type='button'; del.textContent='X';
+          del.onclick = function(){ URL.revokeObjectURL(url); videos.splice(idx,1); renderFormThumbs(); renderOverlay(); };
+          card.appendChild(del); thumbs.appendChild(card);
+        })(videos[j], j);
+      }
       redrawBadge();
+    }
+
+    async function openCamera(){
+      if (!canUseCamera()){
+        // Sin cámara -> inputs de archivo
+        btnFileImg.classList.remove('hidden'); inputImg.classList.remove('hidden');
+        btnFileVid.classList.remove('hidden'); inputVid.classList.remove('hidden');
+        inputImg.click();
+        return;
+      }
+      overlay.classList.add('show'); overlay.setAttribute('aria-hidden','false');
+      renderOverlay();
+
+      // Solicitamos video + audio (sirve para foto y video)
+      try{
+        stream = await navigator.mediaDevices.getUserMedia({
+          video:{ facingMode:{ ideal:'environment' } },
+          audio:true
+        });
+        video.srcObject = stream; await video.play();
+      }catch(e){
+        console.error('getUserMedia error', e);
+        closeCamera();
+        // Fallback inputs
+        btnFileImg.classList.remove('hidden'); inputImg.classList.remove('hidden');
+        btnFileVid.classList.remove('hidden'); inputVid.classList.remove('hidden');
+      }
+    }
+
+    function closeCamera(){
+      if (mediaRecorder && mediaRecorder.state !== 'inactive'){
+        try{ mediaRecorder.stop(); }catch(_){}
+      }
+      if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+      video.srcObject = null;
+      overlay.classList.remove('show'); overlay.setAttribute('aria-hidden','true');
+      // Asegurar botones en estado inicial
+      setMode('photo');
+    }
+
+    function setMode(mode){
+      camMode = mode;
+      btnModePhoto.classList.toggle('active', mode==='photo');
+      btnModeVideo.classList.toggle('active', mode==='video');
+      btnShot.classList.toggle('hidden', mode!=='photo');
+      btnRec.classList.toggle('hidden', mode!=='video');
+      btnStop.classList.add('hidden'); // stop oculto hasta que se esté grabando
+    }
+
+    function bestMime(){
+      var candidates = [
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm',
+        'video/mp4' // algunos Safari modernos
+      ];
+      for (var i=0;i<candidates.length;i++){
+        var m = candidates[i];
+        try{ if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m; }catch(_){}
+      }
+      return '';
+    }
+
+    function startRecording(){
+      if (!canRecord() || !stream){
+        // Fallback a input de archivos de video
+        btnFileVid.classList.remove('hidden'); inputVid.classList.remove('hidden'); inputVid.click();
+        return;
+      }
+      recordedChunks = [];
+      var mime = bestMime();
+      try{
+        mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      }catch(err){
+        console.warn('MediaRecorder init error', err);
+        // Fallback
+        btnFileVid.classList.remove('hidden'); inputVid.classList.remove('hidden'); inputVid.click();
+        return;
+      }
+
+      mediaRecorder.ondataavailable = function(e){ if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = function(){
+        try{
+          var type = mediaRecorder && mediaRecorder.mimeType ? mediaRecorder.mimeType : 'video/webm';
+          var blob = new Blob(recordedChunks, { type: type });
+          var name = 'mantenimiento-' + new Date().toISOString().replace(/[:.]/g,'') + (type.includes('mp4') ? '.mp4' : '.webm');
+          try{ blob.name = name; }catch(_){}
+          videos.push(blob);
+          renderFormThumbs();
+          renderOverlay();
+        }catch(err){ console.error('onstop error', err); }
+        btnRec.classList.remove('hidden');
+        btnStop.classList.add('hidden');
+      };
+
+      mediaRecorder.start();
+      btnRec.classList.add('hidden');
+      btnStop.classList.remove('hidden');
+    }
+
+    function stopRecording(){
+      try{
+        if (mediaRecorder && mediaRecorder.state !== 'inactive'){
+          mediaRecorder.stop();
+        }
+      }catch(err){ console.error('stopRecording', err); }
     }
 
     async function takeShot(){
@@ -205,28 +351,47 @@
     }
 
     function addPhoto(file, name){
-      if (!file) return; try{ file.name = name; }catch(_){ }
+      if (!file) return; try{ file.name = name; }catch(_){}
       photos.push(file); renderFormThumbs(); renderOverlay();
     }
 
-    // Eventos UI cámara
+    // Eventos UI overlay
+    btnModePhoto.addEventListener('click', function(){ setMode('photo'); });
+    btnModeVideo.addEventListener('click', function(){ setMode('video'); });
+
     btnCam.addEventListener('click', openCamera);
     btnShot.addEventListener('click', async function(){
+      if (camMode !== 'photo') return;
       var blob = await takeShot(); if (!blob) return;
       var name = 'mantenimiento-' + new Date().toISOString().replace(/[:.]/g,'') + '.jpg';
       addPhoto(blob, name);
     });
+    btnRec.addEventListener('click', function(){ if (camMode==='video') startRecording(); });
+    btnStop.addEventListener('click', function(){ if (camMode==='video') stopRecording(); });
     btnOK.addEventListener('click', closeCamera);
 
-    // Fallback de archivos
-    btnFile.addEventListener('click', ()=>{ inputEl.classList.remove('hidden'); inputEl.click(); });
-    inputEl.addEventListener('change', function(){
-      var list = (inputEl && inputEl.files) ? inputEl.files : [];
+    // Fallback / subir archivos manualmente
+    btnFileImg.addEventListener('click', ()=>{ inputImg.classList.remove('hidden'); inputImg.click(); });
+    btnFileVid.addEventListener('click', ()=>{ inputVid.classList.remove('hidden'); inputVid.click(); });
+
+    inputImg.addEventListener('change', function(){
+      var list = (inputImg && inputImg.files) ? inputImg.files : [];
       for (var i=0; i<list.length; i++){
-        var f=list[i]; var name = 'mantenimiento-' + (f.name || ('foto-'+(i+1)+'.jpg'));
-        addPhoto(f, name);
+        var f=list[i]; var nm = 'mantenimiento-' + (f.name || ('foto-'+(i+1)+'.jpg'));
+        addPhoto(f, nm);
       }
-      try{ inputEl.value=''; }catch(_){ }
+      try{ inputImg.value=''; }catch(_){}
+    });
+
+    inputVid.addEventListener('change', function(){
+      var list = (inputVid && inputVid.files) ? inputVid.files : [];
+      for (var i=0; i<list.length; i++){
+        var f=list[i]; var nm = 'mantenimiento-' + (f.name || ('video-'+(i+1)+'.webm'));
+        try{ f.name = nm; }catch(_){}
+        videos.push(f);
+      }
+      renderFormThumbs(); renderOverlay();
+      try{ inputVid.value=''; }catch(_){}
     });
 
     /* ======================== Envío ======================== */
@@ -240,7 +405,10 @@
       e.preventDefault(); closeCamera();
       var desc = (document.getElementById('descripcion').value||'').trim();
       if (!desc){ setStatus('Completá el detalle del problema.', false); return; }
-      if (photos.length===0){ setStatus('Adjuntá al menos 1 foto.', false); return; }
+
+      if ((photos.length + videos.length) === 0){
+        setStatus('Adjuntá al menos 1 foto o video.', false); return;
+      }
 
       var fd = new FormData();
       fd.append('departamento', document.getElementById('departamento').value || '');
@@ -249,19 +417,29 @@
       fd.append('descripcion',  desc);
 
       for (var i=0;i<photos.length;i++){
-        var b=photos[i]; var nm=b.name || ('mantenimiento-shot-'+(i+1)+'.jpg');
+        var b=photos[i]; var nm=b.name || ('mantenimiento-foto-'+(i+1)+'.jpg');
         fd.append('media[]', b, nm);
+      }
+      for (var j=0;j<videos.length;j++){
+        var v=videos[j]; var nm=v.name || ('mantenimiento-video-'+(j+1)+'.webm');
+        fd.append('media[]', v, nm);
       }
 
       submitBtn.disabled = true; submitBtn.textContent = 'Enviando…'; setStatus('Enviando datos…');
-      var controller = new AbortController(); var timer = setTimeout(()=>controller.abort(), 25000);
+      var controller = new AbortController(); var timer = setTimeout(()=>controller.abort(), 30000);
       fetch(WEBHOOK_URL, { method:'POST', body: fd, redirect:'follow', signal: controller.signal })
         .then(function(res){ clearTimeout(timer); if (!res.ok) throw new Error('HTTP '+res.status); })
-        .then(function(){ setStatus('Enviado con éxito ✅', true); try{ localStorage.removeItem('wba_pending_reg_m'); }catch(_){ }
-              var p=new URLSearchParams({ reg: document.getElementById('reg').value, departamento: document.getElementById('departamento').value, reporta: document.getElementById('reporta').value });
-              location.href='gracias.html?'+p.toString();
+        .then(function(){
+          setStatus('Enviado con éxito ✅', true);
+          try{ localStorage.removeItem('wba_pending_reg_m'); }catch(_){}
+          var p=new URLSearchParams({ reg: document.getElementById('reg').value, departamento: document.getElementById('departamento').value, reporta: document.getElementById('reporta').value });
+          location.href='gracias.html?'+p.toString();
         })
-        .catch(function(err){ console.error(err); setStatus('No se pudo enviar. Revisá conexión o reintentá en unos segundos.', false); submitBtn.disabled=false; submitBtn.textContent='Enviar reporte'; });
+        .catch(function(err){
+          console.error(err);
+          setStatus('No se pudo enviar. Revisá conexión o reintentá en unos segundos.', false);
+          submitBtn.disabled=false; submitBtn.textContent='Enviar reporte';
+        });
     });
   </script>
 </body>
