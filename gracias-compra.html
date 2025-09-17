@@ -51,7 +51,8 @@
       var p = new URLSearchParams();
       if (departamento) p.set('departamento', departamento);
       if (reporta)      p.set('reporta', reporta);
-      location.href = 'reportar-compra.html?' + p.toString();
+      p.set('new','1');
+            location.href = 'reportar-compra.html?' + p.toString();
     });
   </script>
 </body>
