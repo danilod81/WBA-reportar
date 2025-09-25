@@ -37,22 +37,20 @@
   </div>
 
   <script>
-    // Leer QS mínimos
     var qs = new URLSearchParams(location.search || '');
     var departamento = (qs.get('departamento') || '').trim();
     var reporta      = (qs.get('reporta') || '').trim();
 
-    // Pintar
     document.getElementById('kvDepto').textContent   = departamento || '—';
     document.getElementById('kvReporta').textContent = reporta || '—';
 
-    // Cargar otra compra: volvemos al form con mismo dpto + reporta
     document.getElementById('btnAgain').addEventListener('click', function(){
+      try { localStorage.removeItem('wba_pending_reg'); } catch(_) {}
       var p = new URLSearchParams();
       if (departamento) p.set('departamento', departamento);
       if (reporta)      p.set('reporta', reporta);
       p.set('new','1');
-            location.href = 'reportar-compra.html?' + p.toString();
+      location.href = 'reportar-compra.html?' + p.toString();
     });
   </script>
 </body>
