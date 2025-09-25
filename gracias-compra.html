@@ -37,19 +37,20 @@
   </div>
 
   <script>
+    // Mostrar datos
     var qs = new URLSearchParams(location.search || '');
     var departamento = (qs.get('departamento') || '').trim();
     var reporta      = (qs.get('reporta') || '').trim();
-
     document.getElementById('kvDepto').textContent   = departamento || '—';
     document.getElementById('kvReporta').textContent = reporta || '—';
 
+    // Nueva compra: limpiar reg persistido y enviar ?new=1
     document.getElementById('btnAgain').addEventListener('click', function(){
       try { localStorage.removeItem('wba_pending_reg'); } catch(_) {}
       var p = new URLSearchParams();
       if (departamento) p.set('departamento', departamento);
       if (reporta)      p.set('reporta', reporta);
-      p.set('new','1');
+      p.set('new','1');                    // <-- bandera para forzar nuevo reg
       location.href = 'reportar-compra.html?' + p.toString();
     });
   </script>
