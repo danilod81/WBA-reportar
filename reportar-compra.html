@@ -124,7 +124,9 @@
   var newQS = (qs.get('new') || '').trim();
   if (newQS) { try { localStorage.removeItem('wba_pending_reg'); } catch(_) {} }
 
-    var depEl = document.getElementById('departamento');
+    /* NEW_RUN_RESET */
+if (newQS) { try { localStorage.removeItem('wba_pending_reg'); } catch(_) {} regQS=''; }
+var depEl = document.getElementById('departamento');
     var repEl = document.getElementById('reporta');
     var regEl = document.getElementById('reg');
     var pagoEl = document.getElementById('pago_ars');
