@@ -121,6 +121,8 @@
     var depQS = (qs.get('departamento') || '').trim();
     var repQS = (qs.get('reporta') || '').trim();
     var regQS = (qs.get('reg') || '').trim();
+  var newQS = (qs.get('new') || '').trim();
+  if (newQS) { try { localStorage.removeItem('wba_pending_reg'); } catch(_) {} }
 
     var depEl = document.getElementById('departamento');
     var repEl = document.getElementById('reporta');
