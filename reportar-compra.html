@@ -113,7 +113,7 @@
     function getLS(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
     function setLS(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
     function toNum(v){ if (v==null) return 0; var s=String(v).replace(/\s/g,'').replace(/\./g,'').replace(/,/g,'.').replace(/[^0-9.\-]/g,''); var n=parseFloat(s); return isFinite(n)?n:0; }
-    function formatARS(n){ try { return new Intl.NumberFormat('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);} catch(e){ return (n||0).toFixed(2);} }
+    function formatARS(n){ try { return new Intl.NumberFormat('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}).format(n||0);} catch(e){ return String(Math.round(n||0));} }
     function uuid(){ try{ if (crypto && crypto.randomUUID) return crypto.randomUUID(); if (crypto && crypto.getRandomValues){ var a=new Uint8Array(16); crypto.getRandomValues(a); a[6]=(a[6]&0x0f)|0x40; a[8]=(a[8]&0x3f)|0x80; return Array.from(a).map((v,i)=>(i===4||i===6||i===8||i===10?'-':'')+('0'+v.toString(16)).slice(-2)).join(''); } }catch(_){} return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
 
     // ======================== QS e idempotencia ========================
@@ -135,8 +135,21 @@
     if (!regQS){ regQS = getLS('wba_pending_reg') || uuid(); }
     regEl.value = regQS; setLS('wba_pending_reg', regQS);
 
-    function syncPago(){ var n=toNum(pagoDisplay.value); n=Math.round(n); pagoEl.value=String(n); try{ var p=pagoDisplay.selectionStart; pagoDisplay.value=formatARS(n); pagoDisplay.setSelectionRange(p,p);}catch(e){ pagoDisplay.value=formatARS(n);} }catch(e){ pagoDisplay.value=formatARS(n);} }
-    pagoDisplay.addEventListener('input', syncPago);
+    function syncPago(){
+  var n=toNum(pagoDisplay.value);
+  n = Math.round(n);
+  pagoEl.value = String(n);
+  try{
+    var p = pagoDisplay.selectionStart;
+    pagoDisplay.value = formatARS(n);
+    pagoDisplay.setSelectionRange(p,p);
+  }catch(e){
+    pagoDisplay.value = formatARS(n);
+  }
+}
+pagoDisplay.addEventListener('input', syncPago);
+pagoDisplay.addEventListener('blur',  syncPago);
+('input', syncPago);
     pagoDisplay.addEventListener('blur',  syncPago);
 
     // ======================== Cámara ========================
